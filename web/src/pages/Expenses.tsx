@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Pencil, X } from 'lucide-react'
 import { api, type Account, type Category, type CreditCard, type Expense } from '../lib/api'
-import { peso } from '../lib/format'
+import { useMoneyFormatter } from '../lib/PrivacyContext'
 import { card, input, button, secondaryButton, iconButton, editButton, listItem, label as labelClass } from '../lib/ui'
 import { useMonth, isInMonth } from '../lib/MonthContext'
 import MonthSwitcher from '../components/MonthSwitcher'
@@ -20,6 +20,7 @@ const emptyForm = {
 }
 
 export default function Expenses() {
+  const fmt = useMoneyFormatter()
   const { selectedMonth } = useMonth()
   const [searchParams, setSearchParams] = useSearchParams()
   const [expenses, setExpenses] = useState<Expense[]>([])
@@ -82,7 +83,8 @@ export default function Expenses() {
     if (form.amount <= 0) return setFormError('Please enter an amount greater than 0.')
     if (!form.categoryId) return setFormError('Please select a category.')
     if (form.method === 'credit_card' && !form.cardId) return setFormError('Please select which card this was charged to.')
-    if (form.method !== 'credit_card' && !form.accountId) return setFormError('Please select which account this was paid from.')
+    if (form.method !== 'credit_card' && form.method !== 'cash' && !form.accountId)
+      return setFormError('Please select which account this was paid from.')
     setFormError('')
     const payload = {
       amount: form.amount,
@@ -165,7 +167,7 @@ export default function Expenses() {
               ))}
             </select>
           </div>
-          {form.method === 'credit_card' ? (
+          {form.method === 'credit_card' && (
             <div>
               <label className={labelClass}>Which Card?</label>
               <select
@@ -181,7 +183,8 @@ export default function Expenses() {
                 ))}
               </select>
             </div>
-          ) : (
+          )}
+          {form.method !== 'credit_card' && form.method !== 'cash' && (
             <div>
               <label className={labelClass}>Paid From</label>
               <select
@@ -233,7 +236,7 @@ export default function Expenses() {
                 </p>
               </div>
               <div className="flex items-center gap-2">
-                <span className="font-semibold text-red-400">{peso(e.amount)}</span>
+                <span className="font-semibold text-red-400">{fmt(e.amount)}</span>
                 <button onClick={() => startEdit(e)} className={editButton}>
                   <Pencil size={14} />
                 </button>

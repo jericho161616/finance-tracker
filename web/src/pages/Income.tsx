@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Pencil, X } from 'lucide-react'
 import { api, type Account, type Category, type Income as IncomeRow } from '../lib/api'
-import { peso } from '../lib/format'
+import { useMoneyFormatter } from '../lib/PrivacyContext'
 import { card, input, button, secondaryButton, iconButton, editButton, listItem, label as labelClass } from '../lib/ui'
 import { useMonth, isInMonth } from '../lib/MonthContext'
 import MonthSwitcher from '../components/MonthSwitcher'
@@ -15,6 +15,7 @@ const emptyForm = {
 }
 
 export default function Income() {
+  const fmt = useMoneyFormatter()
   const { selectedMonth } = useMonth()
   const [income, setIncome] = useState<IncomeRow[]>([])
   const [categories, setCategories] = useState<Category[]>([])
@@ -112,7 +113,7 @@ export default function Income() {
             />
           </div>
           <div>
-            <label className={labelClass}>Where From?</label>
+            <label className={labelClass}>Source</label>
             <select
               value={form.categoryId}
               onChange={(e) => setForm((f) => ({ ...f, categoryId: e.target.value }))}
@@ -176,7 +177,7 @@ export default function Income() {
                 </p>
               </div>
               <div className="flex items-center gap-2">
-                <span className="font-semibold text-brand-400">{peso(i.amount)}</span>
+                <span className="font-semibold text-brand-400">{fmt(i.amount)}</span>
                 <button onClick={() => startEdit(i)} className={editButton}>
                   <Pencil size={14} />
                 </button>
