@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api, type Account, type Category, type CreditCard } from '../lib/api'
+import { card, input, button } from '../lib/ui'
 
 export default function Settings() {
   const [accounts, setAccounts] = useState<Account[]>([])
@@ -28,9 +29,9 @@ export default function Settings() {
   }, [])
 
   return (
-    <div className="space-y-8">
-      <section className="bg-white rounded-lg border border-slate-200 p-5">
-        <h2 className="font-semibold text-slate-900 mb-3">Accounts (cash / savings / e-wallet)</h2>
+    <div className="space-y-5 animate-in">
+      <section className={card}>
+        <h2 className="font-semibold mb-4">🏦 Accounts (cash / savings / e-wallet)</h2>
         <form
           className="flex flex-wrap gap-2 mb-4"
           onSubmit={async (e) => {
@@ -45,44 +46,38 @@ export default function Settings() {
             placeholder="e.g. BPI Savings"
             value={accName}
             onChange={(e) => setAccName(e.target.value)}
-            className="rounded-md border border-slate-300 px-3 py-2 text-sm flex-1 min-w-[160px]"
+            className={`${input} flex-1 min-w-[160px]`}
           />
-          <select
-            value={accType}
-            onChange={(e) => setAccType(e.target.value)}
-            className="rounded-md border border-slate-300 px-3 py-2 text-sm"
-          >
+          <select value={accType} onChange={(e) => setAccType(e.target.value)} className={input}>
             <option value="savings">Savings</option>
             <option value="cash">Cash</option>
             <option value="ewallet">E-Wallet</option>
           </select>
-          <button className="bg-indigo-600 text-white text-sm px-4 py-2 rounded-md hover:bg-indigo-700">
-            Add
-          </button>
+          <button className={button}>Add</button>
         </form>
-        <ul className="divide-y divide-slate-100">
+        <ul className="divide-y divide-white/5">
           {accounts.map((a) => (
-            <li key={a.id} className="py-2 flex justify-between items-center text-sm">
-              <span>
-                {a.name} <span className="text-slate-400">({a.type})</span>
+            <li key={a.id} className="py-2.5 flex justify-between items-center text-sm">
+              <span className="text-slate-200">
+                {a.name} <span className="text-slate-500">({a.type})</span>
               </span>
               <button
                 onClick={async () => {
                   await api.accounts.remove(a.id)
                   refresh()
                 }}
-                className="text-red-500 hover:text-red-700"
+                className="tap-shrink text-red-400 hover:text-red-300 text-xs"
               >
                 Remove
               </button>
             </li>
           ))}
-          {accounts.length === 0 && <p className="text-sm text-slate-400 py-2">No accounts yet.</p>}
+          {accounts.length === 0 && <p className="text-sm text-slate-500 py-2">No accounts yet.</p>}
         </ul>
       </section>
 
-      <section className="bg-white rounded-lg border border-slate-200 p-5">
-        <h2 className="font-semibold text-slate-900 mb-3">Categories</h2>
+      <section className={card}>
+        <h2 className="font-semibold mb-4">🏷️ Categories</h2>
         <form
           className="flex flex-wrap gap-2 mb-4"
           onSubmit={async (e) => {
@@ -97,43 +92,41 @@ export default function Settings() {
             placeholder="e.g. Groceries"
             value={catName}
             onChange={(e) => setCatName(e.target.value)}
-            className="rounded-md border border-slate-300 px-3 py-2 text-sm flex-1 min-w-[160px]"
+            className={`${input} flex-1 min-w-[160px]`}
           />
           <select
             value={catKind}
             onChange={(e) => setCatKind(e.target.value as 'expense' | 'income')}
-            className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+            className={input}
           >
             <option value="expense">Expense</option>
             <option value="income">Income</option>
           </select>
-          <button className="bg-indigo-600 text-white text-sm px-4 py-2 rounded-md hover:bg-indigo-700">
-            Add
-          </button>
+          <button className={button}>Add</button>
         </form>
-        <ul className="divide-y divide-slate-100">
+        <ul className="divide-y divide-white/5">
           {categories.map((c) => (
-            <li key={c.id} className="py-2 flex justify-between items-center text-sm">
-              <span>
-                {c.name} <span className="text-slate-400">({c.kind})</span>
+            <li key={c.id} className="py-2.5 flex justify-between items-center text-sm">
+              <span className="text-slate-200">
+                {c.name} <span className="text-slate-500">({c.kind})</span>
               </span>
               <button
                 onClick={async () => {
                   await api.categories.remove(c.id)
                   refresh()
                 }}
-                className="text-red-500 hover:text-red-700"
+                className="tap-shrink text-red-400 hover:text-red-300 text-xs"
               >
                 Remove
               </button>
             </li>
           ))}
-          {categories.length === 0 && <p className="text-sm text-slate-400 py-2">No categories yet.</p>}
+          {categories.length === 0 && <p className="text-sm text-slate-500 py-2">No categories yet.</p>}
         </ul>
       </section>
 
-      <section className="bg-white rounded-lg border border-slate-200 p-5">
-        <h2 className="font-semibold text-slate-900 mb-3">Credit Cards</h2>
+      <section className={card}>
+        <h2 className="font-semibold mb-4">💳 Credit Cards</h2>
         <form
           className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4"
           onSubmit={async (e) => {
@@ -153,7 +146,7 @@ export default function Settings() {
             placeholder="Bank / Card name"
             value={cardBank}
             onChange={(e) => setCardBank(e.target.value)}
-            className="rounded-md border border-slate-300 px-3 py-2 text-sm col-span-2 sm:col-span-1"
+            className={`${input} col-span-2 sm:col-span-1`}
           />
           <input
             type="number"
@@ -162,7 +155,7 @@ export default function Settings() {
             value={cardLimit}
             onChange={(e) => setCardLimit(Number(e.target.value))}
             placeholder="Credit Limit"
-            className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+            className={input}
           />
           <input
             type="number"
@@ -171,7 +164,7 @@ export default function Settings() {
             value={cardStmtDay}
             onChange={(e) => setCardStmtDay(Number(e.target.value))}
             placeholder="Statement Day"
-            className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+            className={input}
           />
           <input
             type="number"
@@ -180,16 +173,14 @@ export default function Settings() {
             value={cardDueDay}
             onChange={(e) => setCardDueDay(Number(e.target.value))}
             placeholder="Due Day"
-            className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+            className={input}
           />
-          <button className="bg-indigo-600 text-white text-sm px-4 py-2 rounded-md hover:bg-indigo-700 col-span-2 sm:col-span-4">
-            Add Card
-          </button>
+          <button className={`${button} col-span-2 sm:col-span-4`}>Add Card</button>
         </form>
-        <ul className="divide-y divide-slate-100">
+        <ul className="divide-y divide-white/5">
           {cards.map((c) => (
-            <li key={c.id} className="py-2 flex justify-between items-center text-sm">
-              <span>
+            <li key={c.id} className="py-2.5 flex justify-between items-center text-sm gap-2">
+              <span className="text-slate-200">
                 {c.bank_name} — limit ₱{c.credit_limit.toLocaleString()}, statement day {c.statement_day}, due day{' '}
                 {c.due_day}
               </span>
@@ -198,13 +189,13 @@ export default function Settings() {
                   await api.creditCards.remove(c.id)
                   refresh()
                 }}
-                className="text-red-500 hover:text-red-700"
+                className="tap-shrink text-red-400 hover:text-red-300 text-xs shrink-0"
               >
                 Remove
               </button>
             </li>
           ))}
-          {cards.length === 0 && <p className="text-sm text-slate-400 py-2">No cards yet.</p>}
+          {cards.length === 0 && <p className="text-sm text-slate-500 py-2">No cards yet.</p>}
         </ul>
       </section>
     </div>

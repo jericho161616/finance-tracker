@@ -28,10 +28,13 @@ export default function PinGate({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
-      <div className="w-full max-w-xs bg-white rounded-xl shadow-sm border border-slate-200 p-8 text-center">
-        <h1 className="text-2xl font-semibold text-slate-900 mb-1">🔒 Finance Tracker</h1>
-        <p className="text-slate-500 text-sm mb-6">Enter your PIN to continue</p>
+    <div className="min-h-screen flex items-center justify-center bg-surface px-4">
+      <div className="w-full max-w-xs bg-surface-2 rounded-3xl shadow-xl border border-white/5 p-8 text-center animate-in">
+        <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-brand-500 to-brand-700 flex items-center justify-center text-2xl mx-auto mb-4 shadow-lg shadow-brand-900/40">
+          🔒
+        </div>
+        <h1 className="text-xl font-semibold text-slate-100 mb-1">Finance Tracker</h1>
+        <p className="text-slate-400 text-sm mb-6">Enter your PIN to continue</p>
         <form onSubmit={handleSubmit} className="space-y-3">
           <input
             type="password"
@@ -42,12 +45,12 @@ export default function PinGate({ children }: { children: ReactNode }) {
               setPin(e.target.value)
               setError(false)
             }}
-            className="w-full text-center tracking-widest rounded-md border border-slate-300 px-3 py-2 text-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            className="w-full text-center tracking-[0.5em] rounded-xl border border-white/10 bg-surface-3 px-3 py-3 text-lg text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
           />
-          {error && <p className="text-sm text-red-600">Incorrect PIN</p>}
+          {error && <p className="text-sm text-red-400">Incorrect PIN</p>}
           <button
             type="submit"
-            className="w-full bg-indigo-600 text-white rounded-md py-2 text-sm font-medium hover:bg-indigo-700"
+            className="tap-shrink w-full bg-brand-600 text-white rounded-xl py-2.5 text-sm font-medium hover:bg-brand-500 shadow-lg shadow-brand-900/30"
           >
             Unlock
           </button>
