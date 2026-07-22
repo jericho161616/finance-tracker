@@ -1,15 +1,32 @@
 import { useEffect, useMemo, useState } from 'react'
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis } from 'recharts'
-import { CreditCard as CreditCardIcon, Target, Lightbulb } from 'lucide-react'
+import {
+  PieChart,
+  Pie,
+  Cell,
+  ResponsiveContainer,
+  Tooltip,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  ReferenceLine,
+} from 'recharts'
+import { CreditCard as CreditCardIcon, Target, Lightbulb, TrendingUp, TrendingDown } from 'lucide-react'
 import { api, type Category, type CreditCard, type CreditCardPayment, type Expense, type Income } from '../lib/api'
 import { useMonth, isInMonth } from '../lib/MonthContext'
 import MonthSwitcher from '../components/MonthSwitcher'
 import { getSavingsGoal } from '../lib/savingsGoal'
 import { getBudgetCategories } from '../lib/budget'
 import { computeCycleStatement } from '../lib/cardBalance'
+import { computeMonthlyExpenseTotals } from '../lib/trend'
 import { useMoneyFormatter } from '../lib/PrivacyContext'
 
 const ALLOCATION_COLORS = ['#10b981', '#6366f1', '#f59e0b', '#ef4444', '#06b6d4', '#a855f7', '#ec4899']
+const TREND_RANGES = [
+  { label: '3M', months: 3 },
+  { label: '6M', months: 6 },
+  { label: '1Y', months: 12 },
+] as const
 
 export default function Dashboard() {
   const fmt = useMoneyFormatter()
@@ -21,6 +38,7 @@ export default function Dashboard() {
   const [categories, setCategories] = useState<Category[]>([])
   const [savingsGoal, setSavingsGoalState] = useState(0)
   const [budgetCategories, setBudgetCategoriesState] = useState(getBudgetCategories())
+  const [trendMonths, setTrendMonths] = useState<3 | 6 | 12>(3)
 
   useEffect(() => {
     Promise.all([
@@ -50,15 +68,27 @@ export default function Dashboard() {
     () => income.filter((i) => isInMonth(i.income_date, selectedMonth)),
     [income, selectedMonth],
   )
+  const monthPayments = useMemo(
+    () => payments.filter((p) => isInMonth(p.payment_date, selectedMonth)),
+    [payments, selectedMonth],
+  )
 
-  const totalExpenses = monthExpenses.reduce((sum, e) => sum + e.amount, 0)
   const totalIncome = monthIncome.reduce((sum, i) => sum + i.amount, 0)
-  const netBalance = totalIncome - totalExpenses
+  const totalExpenses = monthExpenses.reduce((sum, e) => sum + e.amount, 0)
+
+  // Cash-basis: only money that actually moved this month counts toward savings.
+  // Credit card swipes are tracked (see "Committed on Cards") but don't reduce
+  // savings until the bill is actually paid.
+  const nonCardExpenses = monthExpenses.filter((e) => e.payment_method !== 'credit_card')
+  const cardSwipesThisMonth = monthExpenses.filter((e) => e.payment_method === 'credit_card')
+  const committedOnCards = cardSwipesThisMonth.reduce((sum, e) => sum + e.amount, 0)
+  const cardPaymentsThisMonth = monthPayments.reduce((sum, p) => sum + p.amount, 0)
+  const cashOutflow = nonCardExpenses.reduce((sum, e) => sum + e.amount, 0) + cardPaymentsThisMonth
+  const netBalance = totalIncome - cashOutflow
   const savingsRate = totalIncome > 0 ? Math.max(0, (netBalance / totalIncome) * 100) : 0
   const goalProgress = savingsGoal > 0 ? Math.min(100, Math.max(0, (netBalance / savingsGoal) * 100)) : 0
 
   const cardBalances = cards.map((c) => ({ card: c, ...computeCycleStatement(c, expenses, payments) }))
-  const totalOutstanding = cardBalances.reduce((sum, c) => sum + Math.max(c.balance, 0), 0)
 
   const byCategory = monthExpenses.reduce<Record<string, number>>((acc, e) => {
     const key = e.category_id ?? 'uncategorized'
@@ -79,6 +109,12 @@ export default function Dashboard() {
     value: (totalIncome * b.percent) / 100,
   }))
 
+  const trendData = useMemo(() => computeMonthlyExpenseTotals(expenses, trendMonths), [expenses, trendMonths])
+  const trendAverage = trendData.length ? trendData.reduce((sum, m) => sum + m.total, 0) / trendData.length : 0
+  const lastTwo = trendData.slice(-2)
+  const monthOverMonthDelta =
+    lastTwo.length === 2 && lastTwo[0].total > 0 ? ((lastTwo[1].total - lastTwo[0].total) / lastTwo[0].total) * 100 : null
+
   return (
     <div className="space-y-5 animate-in">
       <MonthSwitcher />
@@ -91,7 +127,7 @@ export default function Dashboard() {
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-300" /> Income {fmt(totalIncome)}
           </span>
           <span className="flex items-center gap-1.5 bg-white/10 rounded-full px-3 py-1.5 text-xs font-medium">
-            <span className="w-1.5 h-1.5 rounded-full bg-red-300" /> Expenses {fmt(totalExpenses)}
+            <span className="w-1.5 h-1.5 rounded-full bg-red-300" /> Cash-out {fmt(cashOutflow)}
           </span>
         </div>
         {totalIncome > 0 && (
@@ -170,9 +206,15 @@ export default function Dashboard() {
       )}
 
       <div className="grid grid-cols-2 gap-3">
-        <Stat label="Credit Card Debt" value={fmt(totalOutstanding)} accent="text-amber-400" />
+        <Stat label="Committed on Cards" value={fmt(committedOnCards)} accent="text-amber-400" />
         <Stat label="Cards Tracked" value={String(cards.length)} accent="text-brand-400" />
       </div>
+      {committedOnCards > 0 && (
+        <p className="text-xs text-slate-500 -mt-3 px-1">
+          You've charged {fmt(committedOnCards)} to credit cards this month — it's counted in "Spending This Month"
+          below, but won't reduce your savings until you pay the bill.
+        </p>
+      )}
 
       <section className="bg-surface-2 rounded-2xl border border-white/5 p-5">
         <h2 className="font-semibold mb-4 flex items-center gap-1.5">
@@ -201,7 +243,10 @@ export default function Dashboard() {
       </section>
 
       <section className="bg-surface-2 rounded-2xl border border-white/5 p-5">
-        <h2 className="font-semibold mb-4">Spending This Month</h2>
+        <h2 className="font-semibold mb-1">Spending This Month</h2>
+        <p className="text-xs text-slate-500 mb-4">
+          Total: {fmt(totalExpenses)} · includes credit card swipes the moment they're made
+        </p>
         {spendingChartData.length === 0 ? (
           <p className="text-sm text-slate-500">No expenses logged this month.</p>
         ) : (
@@ -229,6 +274,49 @@ export default function Dashboard() {
             </ResponsiveContainer>
           </div>
         )}
+      </section>
+
+      <section className="bg-surface-2 rounded-2xl border border-white/5 p-5">
+        <div className="flex items-center justify-between mb-1">
+          <h2 className="font-semibold">Expense Trend</h2>
+          <div className="flex gap-1">
+            {TREND_RANGES.map((r) => (
+              <button
+                key={r.label}
+                onClick={() => setTrendMonths(r.months)}
+                className={`tap-shrink text-xs font-medium px-2.5 py-1 rounded-full ${
+                  trendMonths === r.months ? 'bg-brand-600 text-white' : 'bg-white/5 text-slate-400 hover:text-slate-100'
+                }`}
+              >
+                {r.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        {monthOverMonthDelta !== null && (
+          <p className={`text-xs mb-3 flex items-center gap-1 ${monthOverMonthDelta > 0 ? 'text-red-400' : 'text-brand-400'}`}>
+            {monthOverMonthDelta > 0 ? <TrendingUp size={13} /> : <TrendingDown size={13} />}
+            {Math.abs(monthOverMonthDelta).toFixed(0)}% {monthOverMonthDelta > 0 ? 'higher' : 'lower'} than last month
+          </p>
+        )}
+        <div style={{ width: '100%', height: 180 }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={trendData} margin={{ left: -20, right: 8, top: 8 }}>
+              <XAxis dataKey="label" tick={{ fill: '#94a3b8', fontSize: 12 }} axisLine={false} tickLine={false} />
+              <YAxis hide />
+              <ReferenceLine y={trendAverage} stroke="rgba(148,163,184,0.4)" strokeDasharray="4 4" />
+              <Tooltip
+                formatter={(value) => fmt(Number(value))}
+                cursor={{ fill: 'rgba(255,255,255,0.04)' }}
+                contentStyle={{ background: '#16211a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, fontSize: 12 }}
+                itemStyle={{ color: '#e2e8f0' }}
+                labelStyle={{ color: '#94a3b8' }}
+              />
+              <Bar dataKey="total" fill="#10b981" radius={[6, 6, 0, 0]} barSize={trendMonths > 6 ? 12 : 28} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+        <p className="text-xs text-slate-500 mt-2">Dashed line marks your {trendMonths}-month average.</p>
       </section>
     </div>
   )
