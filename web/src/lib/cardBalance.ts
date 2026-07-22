@@ -1,5 +1,5 @@
 import { format } from 'date-fns'
-import { currentCycle } from './cycle'
+import { getCycle, getDueDate } from './cycle'
 import type { CreditCard, CreditCardPayment, Expense } from './api'
 
 export interface StatementRow {
@@ -12,10 +12,23 @@ export interface StatementRow {
   availableAfter: number
 }
 
-export function computeCycleStatement(card: CreditCard, expenses: Expense[], payments: CreditCardPayment[]) {
-  const { cycleStart, cycleEnd } = currentCycle(card.statement_day)
+/**
+ * Statement for one billing cycle. Expenses are attributed by charge date within
+ * the cycle; payments are attributed by the cycle whose [cycleStart, dueDate] grace
+ * window contains the payment date — so a payment made after the cycle closes but
+ * before its due date still pays off that cycle, not the next one.
+ */
+export function computeCycleStatement(
+  card: CreditCard,
+  expenses: Expense[],
+  payments: CreditCardPayment[],
+  cycleOffset: number = 0,
+) {
+  const { cycleStart, cycleEnd } = getCycle(card.statement_day, cycleOffset)
+  const dueDate = getDueDate(cycleEnd, card.due_day)
   const cycleStartStr = format(cycleStart, 'yyyy-MM-dd')
   const cycleEndStr = format(cycleEnd, 'yyyy-MM-dd')
+  const dueDateStr = format(dueDate, 'yyyy-MM-dd')
 
   const rows = [
     ...expenses
@@ -28,7 +41,7 @@ export function computeCycleStatement(card: CreditCard, expenses: Expense[], pay
         amount: e.amount,
       })),
     ...payments
-      .filter((p) => p.credit_card_id === card.id && p.payment_date >= cycleStartStr && p.payment_date <= cycleEndStr)
+      .filter((p) => p.credit_card_id === card.id && p.payment_date >= cycleStartStr && p.payment_date <= dueDateStr)
       .map((p) => ({
         kind: 'payment' as const,
         id: p.id,
@@ -45,5 +58,5 @@ export function computeCycleStatement(card: CreditCard, expenses: Expense[], pay
   })
 
   const balance = rowsWithTotals.length ? rowsWithTotals[rowsWithTotals.length - 1].runningTotal : 0
-  return { cycleStart, cycleEnd, rows: rowsWithTotals, balance }
+  return { cycleStart, cycleEnd, dueDate, rows: rowsWithTotals, balance }
 }

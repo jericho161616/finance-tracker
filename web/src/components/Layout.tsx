@@ -1,12 +1,13 @@
 import { NavLink, Outlet } from 'react-router-dom'
+import { LayoutDashboard, Receipt, TrendingUp, CreditCard, Settings, Lock, Wallet } from 'lucide-react'
 import { UNLOCK_KEY } from '../lib/pinGateStorage'
 
 const navItems = [
-  { to: '/', label: 'Dashboard', icon: '📊' },
-  { to: '/expenses', label: 'Expenses', icon: '🧾' },
-  { to: '/income', label: 'Income', icon: '📈' },
-  { to: '/credit-cards', label: 'Cards', icon: '💳' },
-  { to: '/settings', label: 'Settings', icon: '⚙️' },
+  { to: '/', label: 'Dashboard', icon: LayoutDashboard },
+  { to: '/expenses', label: 'Expenses', icon: Receipt },
+  { to: '/income', label: 'Income', icon: TrendingUp },
+  { to: '/credit-cards', label: 'Cards', icon: CreditCard },
+  { to: '/settings', label: 'Settings', icon: Settings },
 ]
 
 export default function Layout() {
@@ -15,16 +16,16 @@ export default function Layout() {
       <header className="sticky top-0 z-20 bg-surface/80 backdrop-blur border-b border-white/5">
         <div className="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between">
           <h1 className="text-lg font-semibold flex items-center gap-2">
-            <span className="text-2xl">💰</span> Finance Tracker
+            <Wallet size={20} className="text-brand-400" /> Finance Tracker
           </h1>
           <button
             onClick={() => {
               localStorage.removeItem(UNLOCK_KEY)
               window.location.reload()
             }}
-            className="tap-shrink text-sm text-slate-400 hover:text-slate-100 px-3 py-1.5 rounded-full border border-white/10"
+            className="tap-shrink flex items-center gap-1.5 text-sm text-slate-400 hover:text-slate-100 px-3 py-1.5 rounded-full border border-white/10"
           >
-            🔒 Lock
+            <Lock size={13} /> Lock
           </button>
         </div>
         <nav className="hidden md:flex max-w-5xl mx-auto px-4 gap-1">
@@ -41,7 +42,7 @@ export default function Layout() {
                 }`
               }
             >
-              <span>{item.icon}</span> {item.label}
+              <item.icon size={15} /> {item.label}
             </NavLink>
           ))}
         </nav>
@@ -64,7 +65,7 @@ export default function Layout() {
                 }`
               }
             >
-              <span className="text-lg leading-none">{item.icon}</span>
+              <item.icon size={18} />
               {item.label}
             </NavLink>
           ))}

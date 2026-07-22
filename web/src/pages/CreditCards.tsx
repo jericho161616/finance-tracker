@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { AlertTriangle, ChevronLeft, ChevronRight, Pencil, X } from 'lucide-react'
 import { api, type Account, type CreditCard, type CreditCardPayment, type Expense } from '../lib/api'
-import { nextDueDate } from '../lib/cycle'
 import { computeCycleStatement } from '../lib/cardBalance'
 import { peso } from '../lib/format'
 import { differenceInCalendarDays, format } from 'date-fns'
@@ -27,6 +27,7 @@ export default function CreditCards() {
   const [payments, setPayments] = useState<CreditCardPayment[]>([])
   const [accounts, setAccounts] = useState<Account[]>([])
   const [expenses, setExpenses] = useState<Expense[]>([])
+  const [cycleOffsets, setCycleOffsets] = useState<Record<string, number>>({})
 
   const [editingPaymentId, setEditingPaymentId] = useState<string | null>(null)
   const [payForm, setPayForm] = useState(emptyPayForm)
@@ -84,12 +85,17 @@ export default function CreditCards() {
     refresh()
   }
 
+  function shiftCycle(cardId: string, delta: number) {
+    setCycleOffsets((prev) => ({ ...prev, [cardId]: (prev[cardId] ?? 0) + delta }))
+  }
+
   return (
     <div className="space-y-5 animate-in">
       <section className={cardBox}>
-        <h2 className="font-semibold mb-1">{editingPaymentId ? '✏️ Edit Payment' : 'Record a Credit Card Payment'}</h2>
-        <p className="text-xs text-amber-400/90 mb-4">
-          ⚠️ This is only for paying your bill (e.g. transferring money from savings to the card). To log a purchase
+        <h2 className="font-semibold mb-1">{editingPaymentId ? 'Edit Payment' : 'Record a Credit Card Payment'}</h2>
+        <p className="flex items-start gap-1.5 text-xs text-amber-400/90 mb-4">
+          <AlertTriangle size={14} className="shrink-0 mt-0.5" />
+          This is only for paying your bill (e.g. transferring money from savings to the card). To log a purchase
           you swiped, use the Expenses page instead — payments here don't count as new expenses since the purchase
           was already recorded there.
         </p>
@@ -169,11 +175,11 @@ export default function CreditCards() {
       {cards.length === 0 && <p className="text-sm text-slate-500">No credit cards yet — add one in Settings.</p>}
 
       {cards.map((card, idx) => {
-        const { cycleStart, cycleEnd, rows, balance } = computeCycleStatement(card, expenses, payments)
+        const offset = cycleOffsets[card.id] ?? 0
+        const { cycleStart, cycleEnd, dueDate, rows, balance } = computeCycleStatement(card, expenses, payments, offset)
         const avail = card.credit_limit - balance
         const utilization = card.credit_limit > 0 ? Math.min(100, Math.max(0, (balance / card.credit_limit) * 100)) : 0
-        const due = nextDueDate(card.statement_day, card.due_day)
-        const daysUntilDue = differenceInCalendarDays(due, new Date())
+        const daysUntilDue = differenceInCalendarDays(dueDate, new Date())
         const gradient = CARD_GRADIENTS[idx % CARD_GRADIENTS.length]
 
         return (
@@ -186,7 +192,7 @@ export default function CreditCards() {
                     daysUntilDue <= 5 ? 'bg-red-500/90' : 'bg-white/15'
                   }`}
                 >
-                  Due {format(due, 'MMM d')} · {daysUntilDue}d
+                  Due {format(dueDate, 'MMM d')} · {daysUntilDue >= 0 ? `${daysUntilDue}d` : 'past due'}
                 </span>
               </div>
               <p className="text-white/70 text-xs">Outstanding Balance (this cycle)</p>
@@ -204,9 +210,34 @@ export default function CreditCards() {
                   style={{ width: `${utilization}%` }}
                 />
               </div>
-              <p className="text-xs text-slate-400 mb-4">
-                {utilization.toFixed(0)}% utilized · Cycle {format(cycleStart, 'MMM d')} – {format(cycleEnd, 'MMM d')}
-              </p>
+
+              <div className="flex items-center justify-between mb-4">
+                <button
+                  onClick={() => shiftCycle(card.id, -1)}
+                  className="tap-shrink text-slate-400 hover:text-slate-100 p-1"
+                  aria-label="Previous cycle"
+                >
+                  <ChevronLeft size={16} />
+                </button>
+                <p className="text-xs text-slate-400">
+                  {utilization.toFixed(0)}% utilized · Cycle {format(cycleStart, 'MMM d')} – {format(cycleEnd, 'MMM d')}
+                  {offset !== 0 && (
+                    <button
+                      onClick={() => setCycleOffsets((prev) => ({ ...prev, [card.id]: 0 }))}
+                      className="tap-shrink ml-2 text-brand-400 hover:text-brand-300"
+                    >
+                      (back to current)
+                    </button>
+                  )}
+                </p>
+                <button
+                  onClick={() => shiftCycle(card.id, 1)}
+                  className="tap-shrink text-slate-400 hover:text-slate-100 p-1"
+                  aria-label="Next cycle"
+                >
+                  <ChevronRight size={16} />
+                </button>
+              </div>
 
               {rows.length > 0 ? (
                 <div className="overflow-x-auto -mx-2">
@@ -242,8 +273,11 @@ export default function CreditCards() {
                             </td>
                             <td className="px-2 py-1.5 text-right whitespace-nowrap">
                               {row.kind === 'expense' ? (
-                                <Link to={`/expenses?edit=${row.id}`} className="tap-shrink text-slate-500 hover:text-brand-400 mr-2">
-                                  ✏️
+                                <Link
+                                  to={`/expenses?edit=${row.id}`}
+                                  className="tap-shrink inline-flex text-slate-500 hover:text-brand-400 mr-2"
+                                >
+                                  <Pencil size={13} />
                                 </Link>
                               ) : (
                                 <button
@@ -251,9 +285,9 @@ export default function CreditCards() {
                                     const p = payments.find((pp) => pp.id === row.id)
                                     if (p) startEditPayment(p)
                                   }}
-                                  className="tap-shrink text-slate-500 hover:text-brand-400 mr-2"
+                                  className="tap-shrink inline-flex text-slate-500 hover:text-brand-400 mr-2"
                                 >
-                                  ✏️
+                                  <Pencil size={13} />
                                 </button>
                               )}
                               <button
@@ -262,9 +296,9 @@ export default function CreditCards() {
                                   else await api.creditCardPayments.remove(row.id)
                                   refresh()
                                 }}
-                                className="tap-shrink text-slate-500 hover:text-red-400"
+                                className="tap-shrink inline-flex text-slate-500 hover:text-red-400"
                               >
-                                ✕
+                                <X size={13} />
                               </button>
                             </td>
                           </tr>
