@@ -21,6 +21,7 @@ export default function Income() {
 
   const [editingId, setEditingId] = useState<string | null>(null)
   const [form, setForm] = useState(emptyForm)
+  const [formError, setFormError] = useState('')
 
   async function refresh() {
     setIncome(await api.income.list())
@@ -46,16 +47,22 @@ export default function Income() {
       accountId: i.account_id ?? '',
       description: i.description ?? '',
     })
+    setFormError('')
   }
 
   function cancelEdit() {
     setEditingId(null)
     setForm(emptyForm)
+    setFormError('')
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (form.amount <= 0) return
+    if (!form.date) return setFormError('Please pick a date.')
+    if (form.amount <= 0) return setFormError('Please enter an amount greater than 0.')
+    if (!form.categoryId) return setFormError('Please select a source.')
+    if (!form.accountId) return setFormError('Please select which account this was deposited to.')
+    setFormError('')
     const payload = {
       amount: form.amount,
       category_id: form.categoryId || null,
@@ -142,6 +149,7 @@ export default function Income() {
               className={`${input} w-full`}
             />
           </div>
+          {formError && <p className="col-span-2 sm:col-span-3 text-sm text-red-400">{formError}</p>}
           <div className="col-span-2 sm:col-span-3 flex gap-2">
             <button className={button}>{editingId ? 'Save Changes' : 'Log Income'}</button>
             {editingId && (

@@ -1,34 +1,38 @@
 import { useEffect, useMemo, useState } from 'react'
-import { api, type CardOutstanding, type Category, type CreditCard, type Expense, type Income } from '../lib/api'
+import { api, type Category, type CreditCard, type CreditCardPayment, type Expense, type Income } from '../lib/api'
 import { peso } from '../lib/format'
 import { useMonth, isInMonth } from '../lib/MonthContext'
 import MonthSwitcher from '../components/MonthSwitcher'
 import { getSavingsGoal } from '../lib/savingsGoal'
+import { getBudgetCategories } from '../lib/budget'
+import { computeCycleStatement } from '../lib/cardBalance'
 
 export default function Dashboard() {
   const { selectedMonth } = useMonth()
   const [expenses, setExpenses] = useState<Expense[]>([])
   const [income, setIncome] = useState<Income[]>([])
   const [cards, setCards] = useState<CreditCard[]>([])
-  const [outstanding, setOutstanding] = useState<CardOutstanding[]>([])
+  const [payments, setPayments] = useState<CreditCardPayment[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [savingsGoal, setSavingsGoalState] = useState(0)
+  const [budgetCategories, setBudgetCategoriesState] = useState(getBudgetCategories())
 
   useEffect(() => {
     Promise.all([
       api.expenses.list(),
       api.income.list(),
       api.creditCards.list(),
-      api.outstanding.list(),
+      api.creditCardPayments.list(),
       api.categories.list(),
-    ]).then(([e, i, c, o, cat]) => {
+    ]).then(([e, i, c, p, cat]) => {
       setExpenses(e)
       setIncome(i)
       setCards(c)
-      setOutstanding(o)
+      setPayments(p)
       setCategories(cat)
     })
     setSavingsGoalState(getSavingsGoal())
+    setBudgetCategoriesState(getBudgetCategories())
   }, [])
 
   const categoryName = (id: string) => categories.find((c) => c.id === id)?.name ?? 'Uncategorized'
@@ -44,16 +48,20 @@ export default function Dashboard() {
 
   const totalExpenses = monthExpenses.reduce((sum, e) => sum + e.amount, 0)
   const totalIncome = monthIncome.reduce((sum, i) => sum + i.amount, 0)
-  const totalOutstanding = outstanding.reduce((sum, o) => sum + (o.outstanding_balance ?? 0), 0)
   const netBalance = totalIncome - totalExpenses
   const savingsRate = totalIncome > 0 ? Math.max(0, (netBalance / totalIncome) * 100) : 0
   const goalProgress = savingsGoal > 0 ? Math.min(100, Math.max(0, (netBalance / savingsGoal) * 100)) : 0
+
+  const cardBalances = cards.map((c) => ({ card: c, ...computeCycleStatement(c, expenses, payments) }))
+  const totalOutstanding = cardBalances.reduce((sum, c) => sum + Math.max(c.balance, 0), 0)
 
   const byCategory = monthExpenses.reduce<Record<string, number>>((acc, e) => {
     const key = e.category_id ?? 'uncategorized'
     acc[key] = (acc[key] ?? 0) + e.amount
     return acc
   }, {})
+
+  const budgetTotal = budgetCategories.reduce((sum, b) => sum + b.percent, 0)
 
   return (
     <div className="space-y-5 animate-in">
@@ -97,6 +105,35 @@ export default function Dashboard() {
         </section>
       )}
 
+      {totalIncome > 0 && budgetTotal > 0 && (
+        <section className="bg-surface-2 rounded-2xl border border-white/5 p-5">
+          <h2 className="font-semibold mb-1">💡 Suggested Allocation</h2>
+          <p className="text-xs text-slate-400 mb-4">
+            Based on this month's income of {peso(totalIncome)}. Adjust the plan in Settings.
+          </p>
+          <div className="space-y-3">
+            {budgetCategories.map((b) => (
+              <div key={b.name} className="text-sm">
+                <div className="flex justify-between mb-1">
+                  <span className="text-slate-300">
+                    {b.name} <span className="text-slate-500">({b.percent}%)</span>
+                  </span>
+                  <span className="font-medium text-slate-100">{peso((totalIncome * b.percent) / 100)}</span>
+                </div>
+                <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
+                  <div className="h-full rounded-full bg-brand-500" style={{ width: `${b.percent}%` }} />
+                </div>
+              </div>
+            ))}
+          </div>
+          {budgetTotal !== 100 && (
+            <p className="text-xs text-amber-400 mt-3">
+              Your allocation percentages add up to {budgetTotal}%, not 100 — adjust them in Settings.
+            </p>
+          )}
+        </section>
+      )}
+
       <div className="grid grid-cols-2 gap-3">
         <Stat label="Credit Card Debt" value={peso(totalOutstanding)} accent="text-amber-400" />
         <Stat label="Cards Tracked" value={String(cards.length)} accent="text-brand-400" />
@@ -105,15 +142,13 @@ export default function Dashboard() {
       <section className="bg-surface-2 rounded-2xl border border-white/5 p-5">
         <h2 className="font-semibold mb-4 flex items-center gap-2">💳 Credit Cards</h2>
         <div className="space-y-4">
-          {cards.map((c) => {
-            const o = outstanding.find((x) => x.credit_card_id === c.id)
-            const bal = o?.outstanding_balance ?? 0
-            const util = c.credit_limit > 0 ? Math.min(100, Math.max(0, (bal / c.credit_limit) * 100)) : 0
+          {cardBalances.map(({ card: c, balance }) => {
+            const util = c.credit_limit > 0 ? Math.min(100, Math.max(0, (balance / c.credit_limit) * 100)) : 0
             return (
               <div key={c.id} className="text-sm">
                 <div className="flex justify-between mb-1.5">
                   <span className="font-medium text-slate-200">{c.bank_name}</span>
-                  <span className="text-slate-400">{peso(bal)} outstanding</span>
+                  <span className="text-slate-400">{peso(balance)} outstanding</span>
                 </div>
                 <div className="h-2 bg-white/5 rounded-full overflow-hidden">
                   <div

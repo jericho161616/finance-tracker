@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
-import { api, type Account, type CardOutstanding, type CreditCard, type CreditCardPayment, type Expense } from '../lib/api'
-import { nextDueDate, currentCycle } from '../lib/cycle'
+import { Link } from 'react-router-dom'
+import { api, type Account, type CreditCard, type CreditCardPayment, type Expense } from '../lib/api'
+import { nextDueDate } from '../lib/cycle'
+import { computeCycleStatement } from '../lib/cardBalance'
 import { peso } from '../lib/format'
 import { differenceInCalendarDays, format } from 'date-fns'
-import { card as cardBox, input, button, label as labelClass } from '../lib/ui'
+import { card as cardBox, input, button, secondaryButton, label as labelClass } from '../lib/ui'
 
 const CARD_GRADIENTS = [
   'from-brand-600 via-brand-700 to-emerald-900',
@@ -12,26 +14,26 @@ const CARD_GRADIENTS = [
   'from-amber-600 via-amber-700 to-slate-900',
 ]
 
-type StatementRow =
-  | { kind: 'expense'; date: string; description: string; amount: number }
-  | { kind: 'payment'; date: string; description: string; amount: number }
+const emptyPayForm = {
+  cardId: '',
+  amount: 0,
+  date: new Date().toISOString().slice(0, 10),
+  sourceId: '',
+  notes: '',
+}
 
 export default function CreditCards() {
   const [cards, setCards] = useState<CreditCard[]>([])
-  const [outstanding, setOutstanding] = useState<CardOutstanding[]>([])
   const [payments, setPayments] = useState<CreditCardPayment[]>([])
   const [accounts, setAccounts] = useState<Account[]>([])
   const [expenses, setExpenses] = useState<Expense[]>([])
 
-  const [payCardId, setPayCardId] = useState('')
-  const [payAmount, setPayAmount] = useState(0)
-  const [payDate, setPayDate] = useState(() => new Date().toISOString().slice(0, 10))
-  const [paySourceId, setPaySourceId] = useState('')
-  const [payNotes, setPayNotes] = useState('')
+  const [editingPaymentId, setEditingPaymentId] = useState<string | null>(null)
+  const [payForm, setPayForm] = useState(emptyPayForm)
+  const [formError, setFormError] = useState('')
 
   async function refresh() {
     setCards(await api.creditCards.list())
-    setOutstanding(await api.outstanding.list())
     setPayments(await api.creditCardPayments.list())
     setAccounts(await api.accounts.list())
     setExpenses(await api.expenses.list())
@@ -41,25 +43,51 @@ export default function CreditCards() {
     refresh()
   }, [])
 
+  function startEditPayment(p: CreditCardPayment) {
+    setEditingPaymentId(p.id)
+    setPayForm({
+      cardId: p.credit_card_id,
+      amount: p.amount,
+      date: p.payment_date,
+      sourceId: p.payment_source_account_id ?? '',
+      notes: p.notes ?? '',
+    })
+    setFormError('')
+  }
+
+  function cancelEditPayment() {
+    setEditingPaymentId(null)
+    setPayForm(emptyPayForm)
+    setFormError('')
+  }
+
   async function handlePay(e: React.FormEvent) {
     e.preventDefault()
-    if (!payCardId || payAmount <= 0) return
-    await api.creditCardPayments.create({
-      credit_card_id: payCardId,
-      amount: payAmount,
-      payment_source_account_id: paySourceId || null,
-      payment_date: payDate,
-      notes: payNotes,
-    })
-    setPayAmount(0)
-    setPayNotes('')
+    if (!payForm.cardId) return setFormError('Please select which card this payment is for.')
+    if (payForm.amount <= 0) return setFormError('Please enter a payment amount greater than 0.')
+    if (!payForm.sourceId) return setFormError('Please select which account this payment came from.')
+    setFormError('')
+
+    const payload = {
+      credit_card_id: payForm.cardId,
+      amount: payForm.amount,
+      payment_source_account_id: payForm.sourceId || null,
+      payment_date: payForm.date,
+      notes: payForm.notes,
+    }
+    if (editingPaymentId) {
+      await api.creditCardPayments.update(editingPaymentId, payload)
+    } else {
+      await api.creditCardPayments.create(payload)
+    }
+    cancelEditPayment()
     refresh()
   }
 
   return (
     <div className="space-y-5 animate-in">
       <section className={cardBox}>
-        <h2 className="font-semibold mb-1">Record a Credit Card Payment</h2>
+        <h2 className="font-semibold mb-1">{editingPaymentId ? '✏️ Edit Payment' : 'Record a Credit Card Payment'}</h2>
         <p className="text-xs text-amber-400/90 mb-4">
           ⚠️ This is only for paying your bill (e.g. transferring money from savings to the card). To log a purchase
           you swiped, use the Expenses page instead — payments here don't count as new expenses since the purchase
@@ -68,7 +96,11 @@ export default function CreditCards() {
         <form onSubmit={handlePay} className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           <div>
             <label className={labelClass}>Which Card?</label>
-            <select value={payCardId} onChange={(e) => setPayCardId(e.target.value)} className={`${input} w-full`}>
+            <select
+              value={payForm.cardId}
+              onChange={(e) => setPayForm((f) => ({ ...f, cardId: e.target.value }))}
+              className={`${input} w-full`}
+            >
               <option value="">Select card…</option>
               {cards.map((c) => (
                 <option key={c.id} value={c.id}>
@@ -84,8 +116,8 @@ export default function CreditCards() {
               min={0}
               step={0.01}
               placeholder="0.00"
-              value={payAmount || ''}
-              onChange={(e) => setPayAmount(Number(e.target.value))}
+              value={payForm.amount || ''}
+              onChange={(e) => setPayForm((f) => ({ ...f, amount: Number(e.target.value) }))}
               className={`${input} w-full`}
             />
           </div>
@@ -93,14 +125,18 @@ export default function CreditCards() {
             <label className={labelClass}>Payment Date</label>
             <input
               type="date"
-              value={payDate}
-              onChange={(e) => setPayDate(e.target.value)}
+              value={payForm.date}
+              onChange={(e) => setPayForm((f) => ({ ...f, date: e.target.value }))}
               className={`${input} w-full`}
             />
           </div>
           <div>
             <label className={labelClass}>Paid From</label>
-            <select value={paySourceId} onChange={(e) => setPaySourceId(e.target.value)} className={`${input} w-full`}>
+            <select
+              value={payForm.sourceId}
+              onChange={(e) => setPayForm((f) => ({ ...f, sourceId: e.target.value }))}
+              className={`${input} w-full`}
+            >
               <option value="">Select account…</option>
               {accounts.map((a) => (
                 <option key={a.id} value={a.id}>
@@ -113,44 +149,32 @@ export default function CreditCards() {
             <label className={labelClass}>Notes (optional)</label>
             <input
               placeholder="e.g. Full payment"
-              value={payNotes}
-              onChange={(e) => setPayNotes(e.target.value)}
+              value={payForm.notes}
+              onChange={(e) => setPayForm((f) => ({ ...f, notes: e.target.value }))}
               className={`${input} w-full`}
             />
           </div>
-          <button className={`${button} col-span-2 sm:col-span-3`}>Log Payment</button>
+          {formError && <p className="col-span-2 sm:col-span-3 text-sm text-red-400">{formError}</p>}
+          <div className="col-span-2 sm:col-span-3 flex gap-2">
+            <button className={button}>{editingPaymentId ? 'Save Changes' : 'Log Payment'}</button>
+            {editingPaymentId && (
+              <button type="button" onClick={cancelEditPayment} className={secondaryButton}>
+                Cancel
+              </button>
+            )}
+          </div>
         </form>
       </section>
 
       {cards.length === 0 && <p className="text-sm text-slate-500">No credit cards yet — add one in Settings.</p>}
 
       {cards.map((card, idx) => {
-        const o = outstanding.find((x) => x.credit_card_id === card.id)
-        const bal = o?.outstanding_balance ?? 0
-        const avail = o?.available_credit ?? card.credit_limit
-        const utilization = card.credit_limit > 0 ? Math.min(100, Math.max(0, (bal / card.credit_limit) * 100)) : 0
+        const { cycleStart, cycleEnd, rows, balance } = computeCycleStatement(card, expenses, payments)
+        const avail = card.credit_limit - balance
+        const utilization = card.credit_limit > 0 ? Math.min(100, Math.max(0, (balance / card.credit_limit) * 100)) : 0
         const due = nextDueDate(card.statement_day, card.due_day)
         const daysUntilDue = differenceInCalendarDays(due, new Date())
-        const { cycleStart, cycleEnd } = currentCycle(card.statement_day)
         const gradient = CARD_GRADIENTS[idx % CARD_GRADIENTS.length]
-
-        const cycleStartStr = format(cycleStart, 'yyyy-MM-dd')
-        const cycleEndStr = format(cycleEnd, 'yyyy-MM-dd')
-
-        const statementRows: StatementRow[] = [
-          ...expenses
-            .filter((e) => e.credit_card_id === card.id && e.expense_date >= cycleStartStr && e.expense_date <= cycleEndStr)
-            .map((e): StatementRow => ({ kind: 'expense', date: e.expense_date, description: e.description || '—', amount: e.amount })),
-          ...payments
-            .filter((p) => p.credit_card_id === card.id && p.payment_date >= cycleStartStr && p.payment_date <= cycleEndStr)
-            .map((p): StatementRow => ({ kind: 'payment', date: p.payment_date, description: p.notes || 'Payment', amount: p.amount })),
-        ].sort((a, b) => a.date.localeCompare(b.date))
-
-        let runningTotal = 0
-        const rowsWithTotals = statementRows.map((row) => {
-          runningTotal += row.kind === 'expense' ? row.amount : -row.amount
-          return { ...row, runningTotal, availableAfter: card.credit_limit - runningTotal }
-        })
 
         return (
           <section key={card.id} className="rounded-3xl overflow-hidden border border-white/5">
@@ -165,8 +189,8 @@ export default function CreditCards() {
                   Due {format(due, 'MMM d')} · {daysUntilDue}d
                 </span>
               </div>
-              <p className="text-white/70 text-xs">Outstanding Balance</p>
-              <p className="text-3xl font-bold tracking-tight">{peso(bal)}</p>
+              <p className="text-white/70 text-xs">Outstanding Balance (this cycle)</p>
+              <p className="text-3xl font-bold tracking-tight">{peso(balance)}</p>
               <div className="flex justify-between mt-6 text-xs text-white/70">
                 <span>Available {peso(avail)}</span>
                 <span>Limit {peso(card.credit_limit)}</span>
@@ -184,9 +208,9 @@ export default function CreditCards() {
                 {utilization.toFixed(0)}% utilized · Cycle {format(cycleStart, 'MMM d')} – {format(cycleEnd, 'MMM d')}
               </p>
 
-              {rowsWithTotals.length > 0 ? (
+              {rows.length > 0 ? (
                 <div className="overflow-x-auto -mx-2">
-                  <table className="w-full text-xs min-w-[420px]">
+                  <table className="w-full text-xs min-w-[480px]">
                     <thead>
                       <tr className="text-slate-500 text-left">
                         <th className="font-medium px-2 py-1.5">Date</th>
@@ -194,16 +218,14 @@ export default function CreditCards() {
                         <th className="font-medium px-2 py-1.5 text-right">Amount</th>
                         <th className="font-medium px-2 py-1.5 text-right">Running Total</th>
                         <th className="font-medium px-2 py-1.5 text-right">Available</th>
+                        <th className="font-medium px-2 py-1.5"></th>
                       </tr>
                     </thead>
                     <tbody>
-                      {rowsWithTotals.map((row, i) => {
+                      {rows.map((row) => {
                         const isFullyPaid = row.kind === 'payment' && row.runningTotal <= 0
                         return (
-                          <tr
-                            key={i}
-                            className={`border-t border-white/5 ${isFullyPaid ? 'bg-brand-500/15' : ''}`}
-                          >
+                          <tr key={`${row.kind}-${row.id}`} className={`border-t border-white/5 ${isFullyPaid ? 'bg-brand-500/15' : ''}`}>
                             <td className="px-2 py-1.5 text-slate-400 whitespace-nowrap">{row.date}</td>
                             <td className="px-2 py-1.5 text-slate-300">{row.description}</td>
                             <td
@@ -216,11 +238,34 @@ export default function CreditCards() {
                             </td>
                             <td className="px-2 py-1.5 text-right text-slate-200">{peso(row.runningTotal)}</td>
                             <td className="px-2 py-1.5 text-right text-slate-400">
-                              {isFullyPaid ? (
-                                <span className="text-brand-400 font-semibold">PAID</span>
+                              {isFullyPaid ? <span className="text-brand-400 font-semibold">PAID</span> : peso(row.availableAfter)}
+                            </td>
+                            <td className="px-2 py-1.5 text-right whitespace-nowrap">
+                              {row.kind === 'expense' ? (
+                                <Link to={`/expenses?edit=${row.id}`} className="tap-shrink text-slate-500 hover:text-brand-400 mr-2">
+                                  ✏️
+                                </Link>
                               ) : (
-                                peso(row.availableAfter)
+                                <button
+                                  onClick={() => {
+                                    const p = payments.find((pp) => pp.id === row.id)
+                                    if (p) startEditPayment(p)
+                                  }}
+                                  className="tap-shrink text-slate-500 hover:text-brand-400 mr-2"
+                                >
+                                  ✏️
+                                </button>
                               )}
+                              <button
+                                onClick={async () => {
+                                  if (row.kind === 'expense') await api.expenses.remove(row.id)
+                                  else await api.creditCardPayments.remove(row.id)
+                                  refresh()
+                                }}
+                                className="tap-shrink text-slate-500 hover:text-red-400"
+                              >
+                                ✕
+                              </button>
                             </td>
                           </tr>
                         )
