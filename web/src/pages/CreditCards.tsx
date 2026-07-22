@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { AlertTriangle, ChevronLeft, ChevronRight, Pencil, X } from 'lucide-react'
 import { api, type Account, type CreditCard, type CreditCardPayment, type Expense } from '../lib/api'
 import { computeCycleStatement } from '../lib/cardBalance'
-import { peso } from '../lib/format'
+import { useMoneyFormatter } from '../lib/PrivacyContext'
 import { differenceInCalendarDays, format } from 'date-fns'
 import { card as cardBox, input, button, secondaryButton, label as labelClass } from '../lib/ui'
 
@@ -23,6 +23,7 @@ const emptyPayForm = {
 }
 
 export default function CreditCards() {
+  const fmt = useMoneyFormatter()
   const [cards, setCards] = useState<CreditCard[]>([])
   const [payments, setPayments] = useState<CreditCardPayment[]>([])
   const [accounts, setAccounts] = useState<Account[]>([])
@@ -196,10 +197,10 @@ export default function CreditCards() {
                 </span>
               </div>
               <p className="text-white/70 text-xs">Outstanding Balance (this cycle)</p>
-              <p className="text-3xl font-bold tracking-tight">{peso(balance)}</p>
+              <p className="text-3xl font-bold tracking-tight">{fmt(balance)}</p>
               <div className="flex justify-between mt-6 text-xs text-white/70">
-                <span>Available {peso(avail)}</span>
-                <span>Limit {peso(card.credit_limit)}</span>
+                <span>Available {fmt(avail)}</span>
+                <span>Limit {fmt(card.credit_limit)}</span>
               </div>
             </div>
 
@@ -265,11 +266,11 @@ export default function CreditCards() {
                               }`}
                             >
                               {row.kind === 'payment' ? '−' : ''}
-                              {peso(row.amount)}
+                              {fmt(row.amount)}
                             </td>
-                            <td className="px-2 py-1.5 text-right text-slate-200">{peso(row.runningTotal)}</td>
+                            <td className="px-2 py-1.5 text-right text-slate-200">{fmt(row.runningTotal)}</td>
                             <td className="px-2 py-1.5 text-right text-slate-400">
-                              {isFullyPaid ? <span className="text-brand-400 font-semibold">PAID</span> : peso(row.availableAfter)}
+                              {isFullyPaid ? <span className="text-brand-400 font-semibold">PAID</span> : fmt(row.availableAfter)}
                             </td>
                             <td className="px-2 py-1.5 text-right whitespace-nowrap">
                               {row.kind === 'expense' ? (

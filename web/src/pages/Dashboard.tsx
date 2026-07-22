@@ -1,17 +1,18 @@
 import { useEffect, useMemo, useState } from 'react'
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts'
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis } from 'recharts'
 import { CreditCard as CreditCardIcon, Target, Lightbulb } from 'lucide-react'
 import { api, type Category, type CreditCard, type CreditCardPayment, type Expense, type Income } from '../lib/api'
-import { peso } from '../lib/format'
 import { useMonth, isInMonth } from '../lib/MonthContext'
 import MonthSwitcher from '../components/MonthSwitcher'
 import { getSavingsGoal } from '../lib/savingsGoal'
 import { getBudgetCategories } from '../lib/budget'
 import { computeCycleStatement } from '../lib/cardBalance'
+import { useMoneyFormatter } from '../lib/PrivacyContext'
 
 const ALLOCATION_COLORS = ['#10b981', '#6366f1', '#f59e0b', '#ef4444', '#06b6d4', '#a855f7', '#ec4899']
 
 export default function Dashboard() {
+  const fmt = useMoneyFormatter()
   const { selectedMonth } = useMonth()
   const [expenses, setExpenses] = useState<Expense[]>([])
   const [income, setIncome] = useState<Income[]>([])
@@ -64,6 +65,12 @@ export default function Dashboard() {
     acc[key] = (acc[key] ?? 0) + e.amount
     return acc
   }, {})
+  const spendingChartData = Object.entries(byCategory)
+    .sort((a, b) => b[1] - a[1])
+    .map(([catId, amt]) => ({
+      name: catId === 'uncategorized' ? 'Uncategorized' : categoryName(catId),
+      amount: amt,
+    }))
 
   const budgetTotal = budgetCategories.reduce((sum, b) => sum + b.percent, 0)
   const allocationData = budgetCategories.map((b) => ({
@@ -78,13 +85,13 @@ export default function Dashboard() {
 
       <div className="rounded-3xl p-6 bg-gradient-to-br from-brand-600 via-brand-700 to-emerald-900 shadow-lg shadow-brand-900/30 text-white">
         <p className="text-brand-100/80 text-sm">Saved This Month</p>
-        <p className="text-4xl font-bold tracking-tight mt-1">{peso(netBalance)}</p>
+        <p className="text-4xl font-bold tracking-tight mt-1">{fmt(netBalance)}</p>
         <div className="flex gap-2 mt-5">
           <span className="flex items-center gap-1.5 bg-white/10 rounded-full px-3 py-1.5 text-xs font-medium">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-300" /> Income {peso(totalIncome)}
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-300" /> Income {fmt(totalIncome)}
           </span>
           <span className="flex items-center gap-1.5 bg-white/10 rounded-full px-3 py-1.5 text-xs font-medium">
-            <span className="w-1.5 h-1.5 rounded-full bg-red-300" /> Expenses {peso(totalExpenses)}
+            <span className="w-1.5 h-1.5 rounded-full bg-red-300" /> Expenses {fmt(totalExpenses)}
           </span>
         </div>
         {totalIncome > 0 && (
@@ -99,7 +106,7 @@ export default function Dashboard() {
               <Target size={16} className="text-brand-400" /> Savings Goal
             </h2>
             <span className="text-xs text-slate-400">
-              {peso(Math.max(netBalance, 0))} / {peso(savingsGoal)}
+              {fmt(Math.max(netBalance, 0))} / {fmt(savingsGoal)}
             </span>
           </div>
           <div className="h-2.5 bg-white/5 rounded-full overflow-hidden">
@@ -120,7 +127,7 @@ export default function Dashboard() {
             <Lightbulb size={16} className="text-brand-400" /> Suggested Allocation
           </h2>
           <p className="text-xs text-slate-400 mb-4">
-            Based on this month's income of {peso(totalIncome)}. Adjust the plan in Settings.
+            Based on this month's income of {fmt(totalIncome)}. Adjust the plan in Settings.
           </p>
           <div className="flex flex-col sm:flex-row items-center gap-4">
             <div className="w-40 h-40 shrink-0">
@@ -132,7 +139,7 @@ export default function Dashboard() {
                     ))}
                   </Pie>
                   <Tooltip
-                    formatter={(value) => peso(Number(value))}
+                    formatter={(value) => fmt(Number(value))}
                     contentStyle={{ background: '#16211a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, fontSize: 12 }}
                     itemStyle={{ color: '#e2e8f0' }}
                   />
@@ -149,7 +156,7 @@ export default function Dashboard() {
                     />
                     {b.name} <span className="text-slate-500">({b.percent}%)</span>
                   </span>
-                  <span className="font-medium text-slate-100">{peso(b.value)}</span>
+                  <span className="font-medium text-slate-100">{fmt(b.value)}</span>
                 </div>
               ))}
             </div>
@@ -163,7 +170,7 @@ export default function Dashboard() {
       )}
 
       <div className="grid grid-cols-2 gap-3">
-        <Stat label="Credit Card Debt" value={peso(totalOutstanding)} accent="text-amber-400" />
+        <Stat label="Credit Card Debt" value={fmt(totalOutstanding)} accent="text-amber-400" />
         <Stat label="Cards Tracked" value={String(cards.length)} accent="text-brand-400" />
       </div>
 
@@ -178,7 +185,7 @@ export default function Dashboard() {
               <div key={c.id} className="text-sm">
                 <div className="flex justify-between mb-1.5">
                   <span className="font-medium text-slate-200">{c.bank_name}</span>
-                  <span className="text-slate-400">{peso(balance)} outstanding</span>
+                  <span className="text-slate-400">{fmt(balance)} outstanding</span>
                 </div>
                 <div className="h-2 bg-white/5 rounded-full overflow-hidden">
                   <div
@@ -195,21 +202,32 @@ export default function Dashboard() {
 
       <section className="bg-surface-2 rounded-2xl border border-white/5 p-5">
         <h2 className="font-semibold mb-4">Spending This Month</h2>
-        {Object.keys(byCategory).length === 0 ? (
+        {spendingChartData.length === 0 ? (
           <p className="text-sm text-slate-500">No expenses logged this month.</p>
         ) : (
-          <ul className="space-y-3">
-            {Object.entries(byCategory)
-              .sort((a, b) => b[1] - a[1])
-              .map(([catId, amt]) => (
-                <li key={catId} className="flex justify-between items-center text-sm">
-                  <span className="text-slate-300">
-                    {catId === 'uncategorized' ? 'Uncategorized' : categoryName(catId)}
-                  </span>
-                  <span className="font-medium text-slate-100">{peso(amt)}</span>
-                </li>
-              ))}
-          </ul>
+          <div style={{ width: '100%', height: Math.max(120, spendingChartData.length * 40) }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={spendingChartData} layout="vertical" margin={{ left: 8, right: 16 }}>
+                <XAxis type="number" hide />
+                <YAxis
+                  type="category"
+                  dataKey="name"
+                  width={110}
+                  tick={{ fill: '#cbd5e1', fontSize: 12 }}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <Tooltip
+                  formatter={(value) => fmt(Number(value))}
+                  cursor={{ fill: 'rgba(255,255,255,0.04)' }}
+                  contentStyle={{ background: '#16211a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, fontSize: 12 }}
+                  itemStyle={{ color: '#e2e8f0' }}
+                  labelStyle={{ color: '#94a3b8' }}
+                />
+                <Bar dataKey="amount" fill="#10b981" radius={[0, 6, 6, 0]} barSize={18} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
         )}
       </section>
     </div>

@@ -1,6 +1,9 @@
+import { useEffect } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
-import { LayoutDashboard, Receipt, TrendingUp, CreditCard, Settings, Lock, Wallet } from 'lucide-react'
+import { LayoutDashboard, Receipt, TrendingUp, CreditCard, Settings, Lock, Wallet, Eye, EyeOff } from 'lucide-react'
 import { UNLOCK_KEY } from '../lib/pinGateStorage'
+import { usePrivacy } from '../lib/PrivacyContext'
+import { seedDefaultCategoriesIfEmpty } from '../lib/seedDefaults'
 
 const navItems = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard },
@@ -11,6 +14,12 @@ const navItems = [
 ]
 
 export default function Layout() {
+  const { hidden, toggle } = usePrivacy()
+
+  useEffect(() => {
+    seedDefaultCategoriesIfEmpty()
+  }, [])
+
   return (
     <div className="min-h-screen bg-surface text-slate-100">
       <header className="sticky top-0 z-20 bg-surface/80 backdrop-blur border-b border-white/5">
@@ -18,15 +27,24 @@ export default function Layout() {
           <h1 className="text-lg font-semibold flex items-center gap-2">
             <Wallet size={20} className="text-brand-400" /> Finance Tracker
           </h1>
-          <button
-            onClick={() => {
-              localStorage.removeItem(UNLOCK_KEY)
-              window.location.reload()
-            }}
-            className="tap-shrink flex items-center gap-1.5 text-sm text-slate-400 hover:text-slate-100 px-3 py-1.5 rounded-full border border-white/10"
-          >
-            <Lock size={13} /> Lock
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={toggle}
+              aria-label={hidden ? 'Show amounts' : 'Hide amounts'}
+              className="tap-shrink flex items-center gap-1.5 text-sm text-slate-400 hover:text-slate-100 px-3 py-1.5 rounded-full border border-white/10"
+            >
+              {hidden ? <EyeOff size={13} /> : <Eye size={13} />}
+            </button>
+            <button
+              onClick={() => {
+                localStorage.removeItem(UNLOCK_KEY)
+                window.location.reload()
+              }}
+              className="tap-shrink flex items-center gap-1.5 text-sm text-slate-400 hover:text-slate-100 px-3 py-1.5 rounded-full border border-white/10"
+            >
+              <Lock size={13} /> Lock
+            </button>
+          </div>
         </div>
         <nav className="hidden md:flex max-w-5xl mx-auto px-4 gap-1">
           {navItems.map((item) => (
