@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api, type Account, type Category, type CreditCard } from '../lib/api'
-import { card, input, button } from '../lib/ui'
+import { card, input, button, label as labelClass } from '../lib/ui'
+import { getSavingsGoal, setSavingsGoal } from '../lib/savingsGoal'
 
 export default function Settings() {
   const [accounts, setAccounts] = useState<Account[]>([])
@@ -18,6 +19,9 @@ export default function Settings() {
   const [cardStmtDay, setCardStmtDay] = useState(15)
   const [cardDueDay, setCardDueDay] = useState(5)
 
+  const [goal, setGoal] = useState(0)
+  const [goalSaved, setGoalSaved] = useState(false)
+
   async function refresh() {
     setAccounts(await api.accounts.list())
     setCategories(await api.categories.list())
@@ -26,14 +30,44 @@ export default function Settings() {
 
   useEffect(() => {
     refresh()
+    setGoal(getSavingsGoal())
   }, [])
 
   return (
     <div className="space-y-5 animate-in">
       <section className={card}>
+        <h2 className="font-semibold mb-1">🎯 Monthly Savings Goal</h2>
+        <p className="text-xs text-slate-400 mb-4">
+          Set how much you want to save each month. The Dashboard will show your progress toward this.
+        </p>
+        <form
+          className="flex flex-wrap gap-2 items-end"
+          onSubmit={(e) => {
+            e.preventDefault()
+            setSavingsGoal(goal)
+            setGoalSaved(true)
+            setTimeout(() => setGoalSaved(false), 1500)
+          }}
+        >
+          <div className="flex-1 min-w-[160px]">
+            <label className={labelClass}>Target amount (₱ / month)</label>
+            <input
+              type="number"
+              min={0}
+              step={500}
+              value={goal || ''}
+              onChange={(e) => setGoal(Number(e.target.value))}
+              className={`${input} w-full`}
+            />
+          </div>
+          <button className={button}>{goalSaved ? 'Saved ✓' : 'Save Goal'}</button>
+        </form>
+      </section>
+
+      <section className={card}>
         <h2 className="font-semibold mb-4">🏦 Accounts (cash / savings / e-wallet)</h2>
         <form
-          className="flex flex-wrap gap-2 mb-4"
+          className="flex flex-wrap gap-2 mb-4 items-end"
           onSubmit={async (e) => {
             e.preventDefault()
             if (!accName.trim()) return
@@ -42,17 +76,23 @@ export default function Settings() {
             refresh()
           }}
         >
-          <input
-            placeholder="e.g. BPI Savings"
-            value={accName}
-            onChange={(e) => setAccName(e.target.value)}
-            className={`${input} flex-1 min-w-[160px]`}
-          />
-          <select value={accType} onChange={(e) => setAccType(e.target.value)} className={input}>
-            <option value="savings">Savings</option>
-            <option value="cash">Cash</option>
-            <option value="ewallet">E-Wallet</option>
-          </select>
+          <div className="flex-1 min-w-[160px]">
+            <label className={labelClass}>Account Name</label>
+            <input
+              placeholder="e.g. BPI Savings"
+              value={accName}
+              onChange={(e) => setAccName(e.target.value)}
+              className={`${input} w-full`}
+            />
+          </div>
+          <div>
+            <label className={labelClass}>Type</label>
+            <select value={accType} onChange={(e) => setAccType(e.target.value)} className={input}>
+              <option value="savings">Savings</option>
+              <option value="cash">Cash</option>
+              <option value="ewallet">E-Wallet</option>
+            </select>
+          </div>
           <button className={button}>Add</button>
         </form>
         <ul className="divide-y divide-white/5">
@@ -79,7 +119,7 @@ export default function Settings() {
       <section className={card}>
         <h2 className="font-semibold mb-4">🏷️ Categories</h2>
         <form
-          className="flex flex-wrap gap-2 mb-4"
+          className="flex flex-wrap gap-2 mb-4 items-end"
           onSubmit={async (e) => {
             e.preventDefault()
             if (!catName.trim()) return
@@ -88,20 +128,26 @@ export default function Settings() {
             refresh()
           }}
         >
-          <input
-            placeholder="e.g. Groceries"
-            value={catName}
-            onChange={(e) => setCatName(e.target.value)}
-            className={`${input} flex-1 min-w-[160px]`}
-          />
-          <select
-            value={catKind}
-            onChange={(e) => setCatKind(e.target.value as 'expense' | 'income')}
-            className={input}
-          >
-            <option value="expense">Expense</option>
-            <option value="income">Income</option>
-          </select>
+          <div className="flex-1 min-w-[160px]">
+            <label className={labelClass}>Category Name</label>
+            <input
+              placeholder="e.g. Groceries"
+              value={catName}
+              onChange={(e) => setCatName(e.target.value)}
+              className={`${input} w-full`}
+            />
+          </div>
+          <div>
+            <label className={labelClass}>Applies To</label>
+            <select
+              value={catKind}
+              onChange={(e) => setCatKind(e.target.value as 'expense' | 'income')}
+              className={input}
+            >
+              <option value="expense">Expense</option>
+              <option value="income">Income</option>
+            </select>
+          </div>
           <button className={button}>Add</button>
         </form>
         <ul className="divide-y divide-white/5">
@@ -142,39 +188,48 @@ export default function Settings() {
             refresh()
           }}
         >
-          <input
-            placeholder="Bank / Card name"
-            value={cardBank}
-            onChange={(e) => setCardBank(e.target.value)}
-            className={`${input} col-span-2 sm:col-span-1`}
-          />
-          <input
-            type="number"
-            min={0}
-            step={1000}
-            value={cardLimit}
-            onChange={(e) => setCardLimit(Number(e.target.value))}
-            placeholder="Credit Limit"
-            className={input}
-          />
-          <input
-            type="number"
-            min={1}
-            max={31}
-            value={cardStmtDay}
-            onChange={(e) => setCardStmtDay(Number(e.target.value))}
-            placeholder="Statement Day"
-            className={input}
-          />
-          <input
-            type="number"
-            min={1}
-            max={31}
-            value={cardDueDay}
-            onChange={(e) => setCardDueDay(Number(e.target.value))}
-            placeholder="Due Day"
-            className={input}
-          />
+          <div className="col-span-2 sm:col-span-1">
+            <label className={labelClass}>Bank / Card Name</label>
+            <input
+              placeholder="e.g. BPI Mastercard"
+              value={cardBank}
+              onChange={(e) => setCardBank(e.target.value)}
+              className={`${input} w-full`}
+            />
+          </div>
+          <div>
+            <label className={labelClass}>Credit Limit</label>
+            <input
+              type="number"
+              min={0}
+              step={1000}
+              value={cardLimit}
+              onChange={(e) => setCardLimit(Number(e.target.value))}
+              className={`${input} w-full`}
+            />
+          </div>
+          <div>
+            <label className={labelClass}>Statement Day</label>
+            <input
+              type="number"
+              min={1}
+              max={31}
+              value={cardStmtDay}
+              onChange={(e) => setCardStmtDay(Number(e.target.value))}
+              className={`${input} w-full`}
+            />
+          </div>
+          <div>
+            <label className={labelClass}>Due Day</label>
+            <input
+              type="number"
+              min={1}
+              max={31}
+              value={cardDueDay}
+              onChange={(e) => setCardDueDay(Number(e.target.value))}
+              className={`${input} w-full`}
+            />
+          </div>
           <button className={`${button} col-span-2 sm:col-span-4`}>Add Card</button>
         </form>
         <ul className="divide-y divide-white/5">
