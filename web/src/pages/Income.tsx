@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { Pencil, X } from 'lucide-react'
 import { api, type Account, type Category, type Income as IncomeRow } from '../lib/api'
 import { peso } from '../lib/format'
 import { card, input, button, secondaryButton, iconButton, editButton, listItem, label as labelClass } from '../lib/ui'
@@ -87,7 +88,7 @@ export default function Income() {
       <MonthSwitcher />
 
       <section className={card}>
-        <h2 className="font-semibold mb-4">{editingId ? '✏️ Edit Income' : '📈 Log Incoming Money'}</h2>
+        <h2 className="font-semibold mb-4">{editingId ? 'Edit Income' : 'Log Incoming Money'}</h2>
         <form onSubmit={handleSubmit} className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           <div>
             <label className={labelClass}>Date</label>
@@ -177,7 +178,7 @@ export default function Income() {
               <div className="flex items-center gap-2">
                 <span className="font-semibold text-brand-400">{peso(i.amount)}</span>
                 <button onClick={() => startEdit(i)} className={editButton}>
-                  ✏️
+                  <Pencil size={14} />
                 </button>
                 <button
                   onClick={async () => {
@@ -186,7 +187,7 @@ export default function Income() {
                   }}
                   className={iconButton}
                 >
-                  ✕
+                  <X size={14} />
                 </button>
               </div>
             </li>

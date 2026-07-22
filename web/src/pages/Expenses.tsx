@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
+import { Pencil, X } from 'lucide-react'
 import { api, type Account, type Category, type CreditCard, type Expense } from '../lib/api'
 import { peso } from '../lib/format'
 import { card, input, button, secondaryButton, iconButton, editButton, listItem, label as labelClass } from '../lib/ui'
@@ -108,7 +109,7 @@ export default function Expenses() {
       <MonthSwitcher />
 
       <section className={card}>
-        <h2 className="font-semibold mb-1">{editingId ? '✏️ Edit Expense' : '🧾 Log an Expense'}</h2>
+        <h2 className="font-semibold mb-1">{editingId ? 'Edit Expense' : 'Log an Expense'}</h2>
         <p className="text-xs text-slate-400 mb-4">
           Swiped your credit card? Log it here with payment method "Credit Card" — it counts as an expense right
           away. Only use the Credit Cards page when you're paying off the bill.
@@ -234,7 +235,7 @@ export default function Expenses() {
               <div className="flex items-center gap-2">
                 <span className="font-semibold text-red-400">{peso(e.amount)}</span>
                 <button onClick={() => startEdit(e)} className={editButton}>
-                  ✏️
+                  <Pencil size={14} />
                 </button>
                 <button
                   onClick={async () => {
@@ -243,7 +244,7 @@ export default function Expenses() {
                   }}
                   className={iconButton}
                 >
-                  ✕
+                  <X size={14} />
                 </button>
               </div>
             </li>

@@ -1,4 +1,5 @@
 import { useState, type FormEvent, type ReactNode } from 'react'
+import { Lock } from 'lucide-react'
 import { UNLOCK_KEY } from '../lib/pinGateStorage'
 
 export default function PinGate({ children }: { children: ReactNode }) {
@@ -30,8 +31,8 @@ export default function PinGate({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-screen flex items-center justify-center bg-surface px-4">
       <div className="w-full max-w-xs bg-surface-2 rounded-3xl shadow-xl border border-white/5 p-8 text-center animate-in">
-        <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-brand-500 to-brand-700 flex items-center justify-center text-2xl mx-auto mb-4 shadow-lg shadow-brand-900/40">
-          🔒
+        <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-brand-500 to-brand-700 flex items-center justify-center mx-auto mb-4 shadow-lg shadow-brand-900/40">
+          <Lock size={22} className="text-white" />
         </div>
         <h1 className="text-xl font-semibold text-slate-100 mb-1">Finance Tracker</h1>
         <p className="text-slate-400 text-sm mb-6">Enter your PIN to continue</p>

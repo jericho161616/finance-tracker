@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Target, Lightbulb, Landmark, Tag, CreditCard as CreditCardIcon, X } from 'lucide-react'
 import { api, type Account, type Category, type CreditCard } from '../lib/api'
 import { card, input, button, secondaryButton, label as labelClass } from '../lib/ui'
 import { getSavingsGoal, setSavingsGoal } from '../lib/savingsGoal'
@@ -43,7 +44,9 @@ export default function Settings() {
   return (
     <div className="space-y-5 animate-in">
       <section className={card}>
-        <h2 className="font-semibold mb-1">🎯 Monthly Savings Goal</h2>
+        <h2 className="font-semibold mb-1 flex items-center gap-1.5">
+          <Target size={16} className="text-brand-400" /> Monthly Savings Goal
+        </h2>
         <p className="text-xs text-slate-400 mb-4">
           Set how much you want to save each month. The Dashboard will show your progress toward this.
         </p>
@@ -72,7 +75,9 @@ export default function Settings() {
       </section>
 
       <section className={card}>
-        <h2 className="font-semibold mb-1">💡 Budget Allocation Plan</h2>
+        <h2 className="font-semibold mb-1 flex items-center gap-1.5">
+          <Lightbulb size={16} className="text-brand-400" /> Budget Allocation Plan
+        </h2>
         <p className="text-xs text-slate-400 mb-4">
           Define how your income should be split. The Dashboard uses this to suggest an allocation each month.
         </p>
@@ -102,9 +107,9 @@ export default function Settings() {
               <span className="text-slate-500 text-sm">%</span>
               <button
                 onClick={() => setBudget((rows) => rows.filter((_, idx) => idx !== i))}
-                className="tap-shrink text-red-400 hover:text-red-300 text-xs px-1"
+                className="tap-shrink inline-flex text-red-400 hover:text-red-300 px-1"
               >
-                ✕
+                <X size={14} />
               </button>
             </div>
           ))}
@@ -135,7 +140,9 @@ export default function Settings() {
       </section>
 
       <section className={card}>
-        <h2 className="font-semibold mb-4">🏦 Accounts (cash / savings / e-wallet)</h2>
+        <h2 className="font-semibold mb-4 flex items-center gap-1.5">
+          <Landmark size={16} className="text-brand-400" /> Accounts (cash / savings / e-wallet)
+        </h2>
         <form
           className="flex flex-wrap gap-2 mb-4 items-end"
           onSubmit={async (e) => {
@@ -187,7 +194,9 @@ export default function Settings() {
       </section>
 
       <section className={card}>
-        <h2 className="font-semibold mb-4">🏷️ Categories</h2>
+        <h2 className="font-semibold mb-4 flex items-center gap-1.5">
+          <Tag size={16} className="text-brand-400" /> Categories
+        </h2>
         <form
           className="flex flex-wrap gap-2 mb-4 items-end"
           onSubmit={async (e) => {
@@ -242,7 +251,9 @@ export default function Settings() {
       </section>
 
       <section className={card}>
-        <h2 className="font-semibold mb-4">💳 Credit Cards</h2>
+        <h2 className="font-semibold mb-4 flex items-center gap-1.5">
+          <CreditCardIcon size={16} className="text-brand-400" /> Credit Cards
+        </h2>
         <form
           className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4"
           onSubmit={async (e) => {
