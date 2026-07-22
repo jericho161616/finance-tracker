@@ -77,6 +77,16 @@ export const api = {
       payment_date: string
       notes?: string
     }) => unwrap(supabase.from('credit_card_payments').insert(row).select().single()),
+    update: (
+      id: string,
+      row: Partial<{
+        credit_card_id: string
+        amount: number
+        payment_source_account_id: string | null
+        payment_date: string
+        notes: string
+      }>,
+    ) => unwrap(supabase.from('credit_card_payments').update(row).eq('id', id).select().single()),
     remove: (id: string) => unwrap(supabase.from('credit_card_payments').delete().eq('id', id).select()),
   },
   income: {

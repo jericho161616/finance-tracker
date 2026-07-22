@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { api, type Account, type Category, type CreditCard, type Expense } from '../lib/api'
 import { peso } from '../lib/format'
 import { card, input, button, secondaryButton, iconButton, editButton, listItem, label as labelClass } from '../lib/ui'
@@ -19,6 +20,7 @@ const emptyForm = {
 
 export default function Expenses() {
   const { selectedMonth } = useMonth()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [expenses, setExpenses] = useState<Expense[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [accounts, setAccounts] = useState<Account[]>([])
@@ -26,16 +28,26 @@ export default function Expenses() {
 
   const [editingId, setEditingId] = useState<string | null>(null)
   const [form, setForm] = useState(emptyForm)
+  const [formError, setFormError] = useState('')
 
   async function refresh() {
-    setExpenses(await api.expenses.list())
+    const all = await api.expenses.list()
+    setExpenses(all)
     setCategories((await api.categories.list()).filter((c) => c.kind === 'expense'))
     setAccounts(await api.accounts.list())
     setCards(await api.creditCards.list())
+
+    const editId = searchParams.get('edit')
+    if (editId) {
+      const target = all.find((e) => e.id === editId)
+      if (target) startEdit(target)
+      setSearchParams({}, { replace: true })
+    }
   }
 
   useEffect(() => {
     refresh()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const monthExpenses = useMemo(
@@ -54,16 +66,23 @@ export default function Expenses() {
       accountId: e.account_id ?? '',
       description: e.description ?? '',
     })
+    setFormError('')
   }
 
   function cancelEdit() {
     setEditingId(null)
     setForm(emptyForm)
+    setFormError('')
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (form.amount <= 0) return
+    if (!form.date) return setFormError('Please pick a date.')
+    if (form.amount <= 0) return setFormError('Please enter an amount greater than 0.')
+    if (!form.categoryId) return setFormError('Please select a category.')
+    if (form.method === 'credit_card' && !form.cardId) return setFormError('Please select which card this was charged to.')
+    if (form.method !== 'credit_card' && !form.accountId) return setFormError('Please select which account this was paid from.')
+    setFormError('')
     const payload = {
       amount: form.amount,
       category_id: form.categoryId || null,
@@ -163,7 +182,7 @@ export default function Expenses() {
             </div>
           ) : (
             <div>
-              <label className={labelClass}>Paid From (optional)</label>
+              <label className={labelClass}>Paid From</label>
               <select
                 value={form.accountId}
                 onChange={(e) => setForm((f) => ({ ...f, accountId: e.target.value }))}
@@ -187,6 +206,7 @@ export default function Expenses() {
               className={`${input} w-full`}
             />
           </div>
+          {formError && <p className="col-span-2 sm:col-span-3 text-sm text-red-400">{formError}</p>}
           <div className="col-span-2 sm:col-span-3 flex gap-2">
             <button className={button}>{editingId ? 'Save Changes' : 'Log Expense'}</button>
             {editingId && (

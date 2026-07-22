@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { api, type Account, type Category, type CreditCard } from '../lib/api'
-import { card, input, button, label as labelClass } from '../lib/ui'
+import { card, input, button, secondaryButton, label as labelClass } from '../lib/ui'
 import { getSavingsGoal, setSavingsGoal } from '../lib/savingsGoal'
+import { getBudgetCategories, setBudgetCategories, type BudgetCategory } from '../lib/budget'
 
 export default function Settings() {
   const [accounts, setAccounts] = useState<Account[]>([])
@@ -22,6 +23,9 @@ export default function Settings() {
   const [goal, setGoal] = useState(0)
   const [goalSaved, setGoalSaved] = useState(false)
 
+  const [budget, setBudget] = useState<BudgetCategory[]>([])
+  const [budgetSaved, setBudgetSaved] = useState(false)
+
   async function refresh() {
     setAccounts(await api.accounts.list())
     setCategories(await api.categories.list())
@@ -31,7 +35,10 @@ export default function Settings() {
   useEffect(() => {
     refresh()
     setGoal(getSavingsGoal())
+    setBudget(getBudgetCategories())
   }, [])
+
+  const budgetTotal = budget.reduce((sum, b) => sum + b.percent, 0)
 
   return (
     <div className="space-y-5 animate-in">
@@ -62,6 +69,69 @@ export default function Settings() {
           </div>
           <button className={button}>{goalSaved ? 'Saved ✓' : 'Save Goal'}</button>
         </form>
+      </section>
+
+      <section className={card}>
+        <h2 className="font-semibold mb-1">💡 Budget Allocation Plan</h2>
+        <p className="text-xs text-slate-400 mb-4">
+          Define how your income should be split. The Dashboard uses this to suggest an allocation each month.
+        </p>
+        <div className="space-y-2 mb-3">
+          {budget.map((b, i) => (
+            <div key={i} className="flex gap-2 items-center">
+              <input
+                value={b.name}
+                onChange={(e) =>
+                  setBudget((rows) => rows.map((r, idx) => (idx === i ? { ...r, name: e.target.value } : r)))
+                }
+                className={`${input} flex-1`}
+                placeholder="Category name"
+              />
+              <input
+                type="number"
+                min={0}
+                max={100}
+                value={b.percent || ''}
+                onChange={(e) =>
+                  setBudget((rows) =>
+                    rows.map((r, idx) => (idx === i ? { ...r, percent: Number(e.target.value) } : r)),
+                  )
+                }
+                className={`${input} w-20 text-right`}
+              />
+              <span className="text-slate-500 text-sm">%</span>
+              <button
+                onClick={() => setBudget((rows) => rows.filter((_, idx) => idx !== i))}
+                className="tap-shrink text-red-400 hover:text-red-300 text-xs px-1"
+              >
+                ✕
+              </button>
+            </div>
+          ))}
+        </div>
+        <div className="flex flex-wrap gap-2 items-center">
+          <button
+            type="button"
+            onClick={() => setBudget((rows) => [...rows, { name: '', percent: 0 }])}
+            className={secondaryButton}
+          >
+            + Add Category
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setBudgetCategories(budget)
+              setBudgetSaved(true)
+              setTimeout(() => setBudgetSaved(false), 1500)
+            }}
+            className={button}
+          >
+            {budgetSaved ? 'Saved ✓' : 'Save Plan'}
+          </button>
+          <span className={`text-xs ${budgetTotal === 100 ? 'text-slate-500' : 'text-amber-400'}`}>
+            Total: {budgetTotal}% {budgetTotal !== 100 && '(should be 100%)'}
+          </span>
+        </div>
       </section>
 
       <section className={card}>
