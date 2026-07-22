@@ -1,5 +1,5 @@
 import { NavLink, Outlet } from 'react-router-dom'
-import { supabase } from '../lib/supabaseClient'
+import { UNLOCK_KEY } from '../lib/pinGateStorage'
 
 const navItems = [
   { to: '/', label: '📊 Dashboard' },
@@ -16,10 +16,13 @@ export default function Layout() {
         <div className="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between">
           <h1 className="text-lg font-semibold text-slate-900">💰 Finance Tracker</h1>
           <button
-            onClick={() => supabase.auth.signOut()}
+            onClick={() => {
+              localStorage.removeItem(UNLOCK_KEY)
+              window.location.reload()
+            }}
             className="text-sm text-slate-500 hover:text-slate-800"
           >
-            Sign out
+            Lock
           </button>
         </div>
         <nav className="max-w-5xl mx-auto px-4 flex gap-1 overflow-x-auto">
