@@ -1,13 +1,18 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { api, type CardOutstanding, type Category, type CreditCard, type Expense, type Income } from '../lib/api'
 import { peso } from '../lib/format'
+import { useMonth, isInMonth } from '../lib/MonthContext'
+import MonthSwitcher from '../components/MonthSwitcher'
+import { getSavingsGoal } from '../lib/savingsGoal'
 
 export default function Dashboard() {
+  const { selectedMonth } = useMonth()
   const [expenses, setExpenses] = useState<Expense[]>([])
   const [income, setIncome] = useState<Income[]>([])
   const [cards, setCards] = useState<CreditCard[]>([])
   const [outstanding, setOutstanding] = useState<CardOutstanding[]>([])
   const [categories, setCategories] = useState<Category[]>([])
+  const [savingsGoal, setSavingsGoalState] = useState(0)
 
   useEffect(() => {
     Promise.all([
@@ -23,16 +28,28 @@ export default function Dashboard() {
       setOutstanding(o)
       setCategories(cat)
     })
+    setSavingsGoalState(getSavingsGoal())
   }, [])
 
   const categoryName = (id: string) => categories.find((c) => c.id === id)?.name ?? 'Uncategorized'
 
-  const totalExpenses = expenses.reduce((sum, e) => sum + e.amount, 0)
-  const totalIncome = income.reduce((sum, i) => sum + i.amount, 0)
+  const monthExpenses = useMemo(
+    () => expenses.filter((e) => isInMonth(e.expense_date, selectedMonth)),
+    [expenses, selectedMonth],
+  )
+  const monthIncome = useMemo(
+    () => income.filter((i) => isInMonth(i.income_date, selectedMonth)),
+    [income, selectedMonth],
+  )
+
+  const totalExpenses = monthExpenses.reduce((sum, e) => sum + e.amount, 0)
+  const totalIncome = monthIncome.reduce((sum, i) => sum + i.amount, 0)
   const totalOutstanding = outstanding.reduce((sum, o) => sum + (o.outstanding_balance ?? 0), 0)
   const netBalance = totalIncome - totalExpenses
+  const savingsRate = totalIncome > 0 ? Math.max(0, (netBalance / totalIncome) * 100) : 0
+  const goalProgress = savingsGoal > 0 ? Math.min(100, Math.max(0, (netBalance / savingsGoal) * 100)) : 0
 
-  const byCategory = expenses.reduce<Record<string, number>>((acc, e) => {
+  const byCategory = monthExpenses.reduce<Record<string, number>>((acc, e) => {
     const key = e.category_id ?? 'uncategorized'
     acc[key] = (acc[key] ?? 0) + e.amount
     return acc
@@ -40,8 +57,10 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-5 animate-in">
+      <MonthSwitcher />
+
       <div className="rounded-3xl p-6 bg-gradient-to-br from-brand-600 via-brand-700 to-emerald-900 shadow-lg shadow-brand-900/30 text-white">
-        <p className="text-brand-100/80 text-sm">Net Balance</p>
+        <p className="text-brand-100/80 text-sm">Saved This Month</p>
         <p className="text-4xl font-bold tracking-tight mt-1">{peso(netBalance)}</p>
         <div className="flex gap-2 mt-5">
           <span className="flex items-center gap-1.5 bg-white/10 rounded-full px-3 py-1.5 text-xs font-medium">
@@ -51,7 +70,32 @@ export default function Dashboard() {
             <span className="w-1.5 h-1.5 rounded-full bg-red-300" /> Expenses {peso(totalExpenses)}
           </span>
         </div>
+        {totalIncome > 0 && (
+          <p className="text-xs text-brand-100/70 mt-3">Savings rate: {savingsRate.toFixed(0)}% of income</p>
+        )}
       </div>
+
+      {savingsGoal > 0 && (
+        <section className="bg-surface-2 rounded-2xl border border-white/5 p-5">
+          <div className="flex justify-between items-baseline mb-2">
+            <h2 className="font-semibold">🎯 Savings Goal</h2>
+            <span className="text-xs text-slate-400">
+              {peso(Math.max(netBalance, 0))} / {peso(savingsGoal)}
+            </span>
+          </div>
+          <div className="h-2.5 bg-white/5 rounded-full overflow-hidden">
+            <div
+              className={`h-full rounded-full ${goalProgress >= 100 ? 'bg-brand-400' : 'bg-brand-600'}`}
+              style={{ width: `${goalProgress}%` }}
+            />
+          </div>
+          <p className="text-xs text-slate-500 mt-2">
+            {goalProgress >= 100
+              ? "You've hit your savings goal this month! 🎉"
+              : `${goalProgress.toFixed(0)}% of the way there`}
+          </p>
+        </section>
+      )}
 
       <div className="grid grid-cols-2 gap-3">
         <Stat label="Credit Card Debt" value={peso(totalOutstanding)} accent="text-amber-400" />
@@ -85,9 +129,9 @@ export default function Dashboard() {
       </section>
 
       <section className="bg-surface-2 rounded-2xl border border-white/5 p-5">
-        <h2 className="font-semibold mb-4">Spending Overview</h2>
+        <h2 className="font-semibold mb-4">Spending This Month</h2>
         {Object.keys(byCategory).length === 0 ? (
-          <p className="text-sm text-slate-500">No expenses logged yet.</p>
+          <p className="text-sm text-slate-500">No expenses logged this month.</p>
         ) : (
           <ul className="space-y-3">
             {Object.entries(byCategory)

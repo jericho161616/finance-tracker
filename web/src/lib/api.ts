@@ -54,6 +54,18 @@ export const api = {
       description?: string
       expense_date: string
     }) => unwrap(supabase.from('expenses').insert(row).select().single()),
+    update: (
+      id: string,
+      row: Partial<{
+        amount: number
+        category_id: string | null
+        payment_method: string
+        credit_card_id: string | null
+        account_id: string | null
+        description: string
+        expense_date: string
+      }>,
+    ) => unwrap(supabase.from('expenses').update(row).eq('id', id).select().single()),
     remove: (id: string) => unwrap(supabase.from('expenses').delete().eq('id', id).select()),
   },
   creditCardPayments: {
@@ -76,6 +88,16 @@ export const api = {
       description?: string
       income_date: string
     }) => unwrap(supabase.from('income').insert(row).select().single()),
+    update: (
+      id: string,
+      row: Partial<{
+        amount: number
+        category_id: string | null
+        account_id: string | null
+        description: string
+        income_date: string
+      }>,
+    ) => unwrap(supabase.from('income').update(row).eq('id', id).select().single()),
     remove: (id: string) => unwrap(supabase.from('income').delete().eq('id', id).select()),
   },
 }
