@@ -41,6 +41,7 @@ export type Database = {
       }
       categories: {
         Row: {
+          budget_bucket: string | null
           created_at: string
           id: string
           is_default: boolean
@@ -49,6 +50,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          budget_bucket?: string | null
           created_at?: string
           id?: string
           is_default?: boolean
@@ -57,6 +59,7 @@ export type Database = {
           user_id?: string
         }
         Update: {
+          budget_bucket?: string | null
           created_at?: string
           id?: string
           is_default?: boolean

@@ -119,11 +119,20 @@ export default function Dashboard() {
     () => allocations.filter((a) => isInMonth(a.allocation_date, selectedMonth)),
     [allocations, selectedMonth],
   )
-  const totalAllocated = monthAllocations.reduce((sum, a) => sum + a.amount, 0)
+  const bucketedExpenses = useMemo(
+    () => monthExpenses.filter((e) => e.category_id && categories.find((c) => c.id === e.category_id)?.budget_bucket),
+    [monthExpenses, categories],
+  )
+  const totalAllocated =
+    monthAllocations.reduce((sum, a) => sum + a.amount, 0) + bucketedExpenses.reduce((sum, e) => sum + e.amount, 0)
   const actualByBucket = monthAllocations.reduce<Record<string, number>>((acc, a) => {
     acc[a.bucket] = (acc[a.bucket] ?? 0) + a.amount
     return acc
   }, {})
+  for (const e of bucketedExpenses) {
+    const bucket = categories.find((c) => c.id === e.category_id)!.budget_bucket!
+    actualByBucket[bucket] = (actualByBucket[bucket] ?? 0) + e.amount
+  }
   const bucketNames = Array.from(new Set([...budgetCategories.map((b) => b.name), ...Object.keys(actualByBucket)]))
   const actualVsPlanned = bucketNames.map((name) => ({
     name,
@@ -315,13 +324,18 @@ export default function Dashboard() {
             <PiggyBank size={16} className="text-brand-400" /> Actual Allocation
           </h2>
           <p className="text-xs text-slate-500 mb-4">
-            {fmt(totalAllocated)} logged this month · {fmt(Math.max(unallocated, 0))} not yet allocated —{' '}
+            {fmt(totalAllocated)} tracked this month ({fmt(monthAllocations.reduce((sum, a) => sum + a.amount, 0))} logged
+            manually, {fmt(bucketedExpenses.reduce((sum, e) => sum + e.amount, 0))} from tagged expenses) ·{' '}
+            {fmt(Math.max(unallocated, 0))} not yet allocated —{' '}
             <Link to="/allocations" className="text-brand-400 hover:text-brand-300">
               log it
             </Link>
           </p>
-          {monthAllocations.length === 0 ? (
-            <p className="text-sm text-slate-500">No allocations logged this month yet.</p>
+          {monthAllocations.length === 0 && bucketedExpenses.length === 0 ? (
+            <p className="text-sm text-slate-500">
+              No allocations tracked this month yet. Log a transfer on the Allocations page, or tag expense categories
+              with a budget bucket in Settings.
+            </p>
           ) : (
             <div style={{ width: '100%', height: Math.max(140, actualVsPlanned.length * 44) }}>
               <ResponsiveContainer width="100%" height="100%">

@@ -248,23 +248,50 @@ export default function Settings() {
           {categories
             .filter((c) => c.kind === catFilter)
             .map((c) => (
-              <li key={c.id} className="py-2.5 flex justify-between items-center text-sm">
+              <li key={c.id} className="py-2.5 flex justify-between items-center text-sm gap-2">
                 <span className="text-slate-200">{c.name}</span>
-                <button
-                  onClick={async () => {
-                    await api.categories.remove(c.id)
-                    refresh()
-                  }}
-                  className="tap-shrink text-red-400 hover:text-red-300 text-xs"
-                >
-                  Remove
-                </button>
+                <div className="flex items-center gap-2 shrink-0">
+                  {catFilter === 'expense' && (
+                    <select
+                      value={c.budget_bucket ?? ''}
+                      onChange={async (e) => {
+                        await api.categories.update(c.id, { budget_bucket: e.target.value || null })
+                        refresh()
+                      }}
+                      className={`${input} text-xs py-1.5`}
+                      title="Which budget bucket this counts toward in Actual Allocation"
+                    >
+                      <option value="">No bucket</option>
+                      {budget.map((b) => (
+                        <option key={b.name} value={b.name}>
+                          {b.name}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  <button
+                    onClick={async () => {
+                      await api.categories.remove(c.id)
+                      refresh()
+                    }}
+                    className="tap-shrink text-red-400 hover:text-red-300 text-xs"
+                  >
+                    Remove
+                  </button>
+                </div>
               </li>
             ))}
           {categories.filter((c) => c.kind === catFilter).length === 0 && (
             <p className="text-sm text-slate-500 py-2">No {catFilter} categories yet.</p>
           )}
         </ul>
+        {catFilter === 'expense' && (
+          <p className="text-xs text-slate-500 mt-3">
+            Assigning a bucket (e.g. tag "Online Shopping" or "Clothing" as Wants, "Investments" as Investments) makes
+            expenses in that category automatically count toward Actual Allocation on the Dashboard — even if paid by
+            credit card.
+          </p>
+        )}
       </section>
 
       <section className={card}>
