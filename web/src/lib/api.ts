@@ -26,8 +26,10 @@ export const api = {
   },
   categories: {
     list: () => unwrap(supabase.from('categories').select('*').order('created_at')),
-    create: (row: { name: string; kind: 'expense' | 'income' }) =>
+    create: (row: { name: string; kind: 'expense' | 'income'; budget_bucket?: string | null }) =>
       unwrap(supabase.from('categories').insert(row).select().single()),
+    update: (id: string, row: Partial<{ name: string; kind: string; budget_bucket: string | null }>) =>
+      unwrap(supabase.from('categories').update(row).eq('id', id).select().single()),
     remove: (id: string) => unwrap(supabase.from('categories').delete().eq('id', id).select()),
   },
   creditCards: {
