@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { AlertTriangle, ChevronLeft, ChevronRight, Pencil, X } from 'lucide-react'
 import { api, type Account, type Category, type CreditCard, type CreditCardPayment, type Expense } from '../lib/api'
-import { computeCycleStatement } from '../lib/cardBalance'
+import { computeCycleStatement, computeCardBalances } from '../lib/cardBalance'
 import { useMoneyFormatter } from '../lib/PrivacyContext'
 import { differenceInCalendarDays, format } from 'date-fns'
 import { card as cardBox, input, button, secondaryButton, label as labelClass } from '../lib/ui'
@@ -222,9 +222,11 @@ export default function CreditCards() {
 
       {cards.map((card, idx) => {
         const offset = cycleOffsets[card.id] ?? 0
-        const { cycleStart, cycleEnd, dueDate, rows, balance } = computeCycleStatement(card, expenses, payments, offset)
-        const avail = card.credit_limit - balance
-        const utilization = card.credit_limit > 0 ? Math.min(100, Math.max(0, (balance / card.credit_limit) * 100)) : 0
+        const { cycleStart, cycleEnd, rows } = computeCycleStatement(card, expenses, payments, offset)
+        const { currentBalance, statementBalance, dueDate } = computeCardBalances(card, expenses, payments)
+        const avail = card.credit_limit - currentBalance
+        const utilization =
+          card.credit_limit > 0 ? Math.min(100, Math.max(0, (currentBalance / card.credit_limit) * 100)) : 0
         const daysUntilDue = differenceInCalendarDays(dueDate, new Date())
         const gradient = CARD_GRADIENTS[idx % CARD_GRADIENTS.length]
 
@@ -233,16 +235,19 @@ export default function CreditCards() {
             <div className={`bg-gradient-to-br ${gradient} p-6 text-white`}>
               <div className="flex items-center justify-between mb-6">
                 <p className="font-semibold text-lg">{card.bank_name}</p>
-                <span
-                  className={`text-xs font-medium px-2.5 py-1 rounded-full ${
-                    daysUntilDue <= 5 ? 'bg-red-500/90' : 'bg-white/15'
-                  }`}
-                >
-                  Due {format(dueDate, 'MMM d')} · {daysUntilDue >= 0 ? `${daysUntilDue}d` : 'past due'}
-                </span>
+                {statementBalance > 0 && (
+                  <span
+                    className={`text-xs font-medium px-2.5 py-1 rounded-full ${
+                      daysUntilDue <= 5 ? 'bg-red-500/90' : 'bg-white/15'
+                    }`}
+                  >
+                    {fmt(statementBalance)} due {format(dueDate, 'MMM d')} ·{' '}
+                    {daysUntilDue >= 0 ? `${daysUntilDue}d` : 'past due'}
+                  </span>
+                )}
               </div>
-              <p className="text-white/70 text-xs">Outstanding Balance (this cycle)</p>
-              <p className="text-3xl font-bold tracking-tight">{fmt(balance)}</p>
+              <p className="text-white/70 text-xs">Current Balance</p>
+              <p className="text-3xl font-bold tracking-tight">{fmt(currentBalance)}</p>
               <div className="flex justify-between mt-6 text-xs text-white/70">
                 <span>Available {fmt(avail)}</span>
                 <span>Limit {fmt(card.credit_limit)}</span>
@@ -266,7 +271,7 @@ export default function CreditCards() {
                   <ChevronLeft size={16} />
                 </button>
                 <p className="text-xs text-slate-400">
-                  {utilization.toFixed(0)}% utilized · Cycle {format(cycleStart, 'MMM d')} – {format(cycleEnd, 'MMM d')}
+                  {utilization.toFixed(0)}% utilized · Viewing cycle {format(cycleStart, 'MMM d')} – {format(cycleEnd, 'MMM d')}
                   {offset !== 0 && (
                     <button
                       onClick={() => setCycleOffsets((prev) => ({ ...prev, [card.id]: 0 }))}
