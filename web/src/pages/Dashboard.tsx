@@ -87,6 +87,9 @@ export default function Dashboard() {
   // Credit card swipes are tracked (see the debt hero below) but don't reduce
   // savings until the bill is actually paid.
   const nonCardExpenses = monthExpenses.filter((e) => e.payment_method !== 'credit_card')
+  const newChargesThisMonth = monthExpenses
+    .filter((e) => e.payment_method === 'credit_card')
+    .reduce((sum, e) => sum + e.amount, 0)
   const cardPaymentsThisMonth = monthPayments.reduce((sum, p) => sum + p.amount, 0)
   const cashOutflow = nonCardExpenses.reduce((sum, e) => sum + e.amount, 0) + cardPaymentsThisMonth
   const netBalance = totalIncome - cashOutflow
@@ -284,8 +287,10 @@ export default function Dashboard() {
       )}
 
       <div className="grid grid-cols-2 gap-3">
+        <Stat label="New Charges This Month" value={fmt(newChargesThisMonth)} accent="text-amber-400" />
         <Stat label="Cards Tracked" value={String(cards.length)} accent="text-brand-400" />
         <Stat label="Available Credit" value={fmt(totalCardLimit - totalCardDebt)} accent="text-slate-200" />
+        <Stat label="Overall Utilization" value={`${totalCardUtil.toFixed(0)}%`} accent="text-slate-200" />
       </div>
 
       <section className="bg-surface-2 rounded-2xl border border-white/5 p-5">
