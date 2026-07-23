@@ -2,6 +2,38 @@ import { format } from 'date-fns'
 import { getCycle, getDueDate } from './cycle'
 import type { CreditCard, CreditCardPayment, Expense } from './api'
 
+/**
+ * Bank-style balances for a card, mirroring how card issuers present debt:
+ * - currentBalance: everything owed right now, a running total across all history
+ *   (all charges minus all payments, ever) — never resets, always accurate.
+ * - statementBalance: the amount that was locked in when the most recently closed
+ *   cycle ended — this is what's actually due by `dueDate`. Charges made after that
+ *   cycle closed count toward currentBalance but aren't due yet.
+ */
+export function computeCardBalances(
+  card: CreditCard,
+  expenses: Expense[],
+  payments: CreditCardPayment[],
+  today: Date = new Date(),
+) {
+  const cardExpenses = expenses.filter((e) => e.credit_card_id === card.id)
+  const cardPayments = payments.filter((p) => p.credit_card_id === card.id)
+  const todayStr = format(today, 'yyyy-MM-dd')
+
+  const balanceAsOf = (cutoffStr: string) =>
+    cardExpenses.filter((e) => e.expense_date <= cutoffStr).reduce((sum, e) => sum + e.amount, 0) -
+    cardPayments.filter((p) => p.payment_date <= cutoffStr).reduce((sum, p) => sum + p.amount, 0)
+
+  const currentBalance = balanceAsOf(todayStr)
+
+  const { cycleEnd: statementDate } = getCycle(card.statement_day, -1, today)
+  const statementDateStr = format(statementDate, 'yyyy-MM-dd')
+  const statementBalance = balanceAsOf(statementDateStr)
+  const dueDate = getDueDate(statementDate, card.due_day)
+
+  return { currentBalance, statementBalance, statementDate, dueDate }
+}
+
 export interface StatementRow {
   kind: 'expense' | 'payment'
   id: string

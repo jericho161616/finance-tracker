@@ -19,7 +19,7 @@ import { useMonth, isInMonth } from '../lib/MonthContext'
 import MonthSwitcher from '../components/MonthSwitcher'
 import { getSavingsGoal } from '../lib/savingsGoal'
 import { getBudgetCategories } from '../lib/budget'
-import { computeCycleStatement } from '../lib/cardBalance'
+import { computeCardBalances } from '../lib/cardBalance'
 import { computeMonthlyExpenseTotals } from '../lib/trend'
 import { useMoneyFormatter } from '../lib/PrivacyContext'
 import { differenceInCalendarDays, format } from 'date-fns'
@@ -93,12 +93,12 @@ export default function Dashboard() {
   const savingsRate = totalIncome > 0 ? Math.max(0, (netBalance / totalIncome) * 100) : 0
   const goalProgress = savingsGoal > 0 ? Math.min(100, Math.max(0, (netBalance / savingsGoal) * 100)) : 0
 
-  const cardBalances = cards.map((c) => ({ card: c, ...computeCycleStatement(c, expenses, payments) }))
-  const totalCardDebt = cardBalances.reduce((sum, c) => sum + c.balance, 0)
+  const cardBalances = cards.map((c) => ({ card: c, ...computeCardBalances(c, expenses, payments) }))
+  const totalCardDebt = cardBalances.reduce((sum, c) => sum + c.currentBalance, 0)
   const totalCardLimit = cards.reduce((sum, c) => sum + c.credit_limit, 0)
   const totalCardUtil = totalCardLimit > 0 ? Math.min(100, Math.max(0, (totalCardDebt / totalCardLimit) * 100)) : 0
   const dueReminders = cardBalances
-    .filter((c) => c.balance > 0)
+    .filter((c) => c.statementBalance > 0)
     .map((c) => ({ ...c, daysUntilDue: differenceInCalendarDays(c.dueDate, new Date()) }))
     .sort((a, b) => a.daysUntilDue - b.daysUntilDue)
 
@@ -201,6 +201,7 @@ export default function Dashboard() {
             <div>
               <p className="text-red-100/80 text-sm">Total Credit Card Debt</p>
               <p className="text-3xl font-bold tracking-tight mt-1">{fmt(totalCardDebt)}</p>
+              <p className="text-red-100/60 text-xs mt-1">Current balance — everything owed right now, all-time</p>
             </div>
             {totalCardLimit > 0 && (
               <span className="text-xs font-medium bg-white/15 rounded-full px-3 py-1.5 whitespace-nowrap">
@@ -209,15 +210,15 @@ export default function Dashboard() {
             )}
           </div>
           <div className="mt-5 space-y-2.5">
-            {cardBalances.map(({ card: c, balance }) => {
-              const util = c.credit_limit > 0 ? Math.min(100, Math.max(0, (balance / c.credit_limit) * 100)) : 0
+            {cardBalances.map(({ card: c, currentBalance }) => {
+              const util = c.credit_limit > 0 ? Math.min(100, Math.max(0, (currentBalance / c.credit_limit) * 100)) : 0
               return (
                 <div key={c.id} className="flex items-center gap-3 text-sm">
                   <span className="w-14 shrink-0 font-medium text-red-50/90">{c.bank_name}</span>
                   <div className="flex-1 h-1.5 bg-white/15 rounded-full overflow-hidden">
                     <div className="h-full rounded-full bg-red-200" style={{ width: `${util}%` }} />
                   </div>
-                  <span className="w-24 shrink-0 text-right text-red-50/95 tabular-nums">{fmt(balance)}</span>
+                  <span className="w-24 shrink-0 text-right text-red-50/95 tabular-nums">{fmt(currentBalance)}</span>
                 </div>
               )
             })}
@@ -227,7 +228,8 @@ export default function Dashboard() {
 
       {dueReminders.length > 0 && (
         <div className="space-y-2">
-          {dueReminders.map(({ card: c, balance, dueDate, daysUntilDue }) => {
+          <p className="text-xs text-slate-500 px-1">Amount due is your statement balance — new charges since your last statement close aren't due yet.</p>
+          {dueReminders.map(({ card: c, statementBalance, dueDate, daysUntilDue }) => {
             const urgency = daysUntilDue <= 3 ? 'urgent' : daysUntilDue <= 7 ? 'soon' : 'safe'
             return (
               <div
@@ -253,7 +255,7 @@ export default function Dashboard() {
                         urgency === 'urgent' ? 'text-red-400' : urgency === 'soon' ? 'text-amber-400' : 'text-slate-200'
                       }`}
                     >
-                      {fmt(balance)}
+                      {fmt(statementBalance)}
                     </span>
                   </div>
                   <div className="flex items-center gap-2 mt-0.5">
