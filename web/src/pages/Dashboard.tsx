@@ -13,7 +13,7 @@ import {
   ReferenceLine,
   Legend,
 } from 'recharts'
-import { CreditCard as CreditCardIcon, Target, Lightbulb, TrendingUp, TrendingDown, ChevronDown, PiggyBank } from 'lucide-react'
+import { Target, Lightbulb, TrendingUp, TrendingDown, ChevronDown, PiggyBank } from 'lucide-react'
 import { api, type Category, type CreditCard, type CreditCardPayment, type Expense, type Income, type IncomeAllocation } from '../lib/api'
 import { useMonth, isInMonth } from '../lib/MonthContext'
 import MonthSwitcher from '../components/MonthSwitcher'
@@ -22,6 +22,7 @@ import { getBudgetCategories } from '../lib/budget'
 import { computeCycleStatement } from '../lib/cardBalance'
 import { computeMonthlyExpenseTotals } from '../lib/trend'
 import { useMoneyFormatter } from '../lib/PrivacyContext'
+import { differenceInCalendarDays, format } from 'date-fns'
 
 const ALLOCATION_COLORS = ['#10b981', '#6366f1', '#f59e0b', '#ef4444', '#06b6d4', '#a855f7', '#ec4899']
 const TREND_RANGES = [
@@ -83,11 +84,9 @@ export default function Dashboard() {
   const totalExpenses = monthExpenses.reduce((sum, e) => sum + e.amount, 0)
 
   // Cash-basis: only money that actually moved this month counts toward savings.
-  // Credit card swipes are tracked (see "Committed on Cards") but don't reduce
+  // Credit card swipes are tracked (see the debt hero below) but don't reduce
   // savings until the bill is actually paid.
   const nonCardExpenses = monthExpenses.filter((e) => e.payment_method !== 'credit_card')
-  const cardSwipesThisMonth = monthExpenses.filter((e) => e.payment_method === 'credit_card')
-  const committedOnCards = cardSwipesThisMonth.reduce((sum, e) => sum + e.amount, 0)
   const cardPaymentsThisMonth = monthPayments.reduce((sum, p) => sum + p.amount, 0)
   const cashOutflow = nonCardExpenses.reduce((sum, e) => sum + e.amount, 0) + cardPaymentsThisMonth
   const netBalance = totalIncome - cashOutflow
@@ -95,6 +94,13 @@ export default function Dashboard() {
   const goalProgress = savingsGoal > 0 ? Math.min(100, Math.max(0, (netBalance / savingsGoal) * 100)) : 0
 
   const cardBalances = cards.map((c) => ({ card: c, ...computeCycleStatement(c, expenses, payments) }))
+  const totalCardDebt = cardBalances.reduce((sum, c) => sum + c.balance, 0)
+  const totalCardLimit = cards.reduce((sum, c) => sum + c.credit_limit, 0)
+  const totalCardUtil = totalCardLimit > 0 ? Math.min(100, Math.max(0, (totalCardDebt / totalCardLimit) * 100)) : 0
+  const dueReminders = cardBalances
+    .filter((c) => c.balance > 0)
+    .map((c) => ({ ...c, daysUntilDue: differenceInCalendarDays(c.dueDate, new Date()) }))
+    .sort((a, b) => a.daysUntilDue - b.daysUntilDue)
 
   const byCategory = monthExpenses.reduce<Record<string, number>>((acc, e) => {
     const key = e.category_id ?? 'uncategorized'
@@ -189,42 +195,96 @@ export default function Dashboard() {
         </section>
       )}
 
-      <div className="grid grid-cols-2 gap-3">
-        <Stat label="Committed on Cards" value={fmt(committedOnCards)} accent="text-amber-400" />
-        <Stat label="Cards Tracked" value={String(cards.length)} accent="text-brand-400" />
-      </div>
-      {committedOnCards > 0 && (
-        <p className="text-xs text-slate-500 -mt-3 px-1">
-          You've charged {fmt(committedOnCards)} to credit cards this month — it's counted in "Spending This Month"
-          below, but won't reduce your savings until you pay the bill.
-        </p>
+      {cards.length > 0 && (
+        <div className="rounded-3xl p-6 bg-gradient-to-br from-red-800 via-red-900 to-rose-950 shadow-lg shadow-red-950/30 text-white">
+          <div className="flex justify-between items-start">
+            <div>
+              <p className="text-red-100/80 text-sm">Total Credit Card Debt</p>
+              <p className="text-3xl font-bold tracking-tight mt-1">{fmt(totalCardDebt)}</p>
+            </div>
+            {totalCardLimit > 0 && (
+              <span className="text-xs font-medium bg-white/15 rounded-full px-3 py-1.5 whitespace-nowrap">
+                {totalCardUtil.toFixed(0)}% of {fmt(totalCardLimit)} limit
+              </span>
+            )}
+          </div>
+          <div className="mt-5 space-y-2.5">
+            {cardBalances.map(({ card: c, balance }) => {
+              const util = c.credit_limit > 0 ? Math.min(100, Math.max(0, (balance / c.credit_limit) * 100)) : 0
+              return (
+                <div key={c.id} className="flex items-center gap-3 text-sm">
+                  <span className="w-14 shrink-0 font-medium text-red-50/90">{c.bank_name}</span>
+                  <div className="flex-1 h-1.5 bg-white/15 rounded-full overflow-hidden">
+                    <div className="h-full rounded-full bg-red-200" style={{ width: `${util}%` }} />
+                  </div>
+                  <span className="w-24 shrink-0 text-right text-red-50/95 tabular-nums">{fmt(balance)}</span>
+                </div>
+              )
+            })}
+          </div>
+        </div>
       )}
 
-      <section className="bg-surface-2 rounded-2xl border border-white/5 p-5">
-        <h2 className="font-semibold mb-4 flex items-center gap-1.5">
-          <CreditCardIcon size={16} className="text-brand-400" /> Credit Cards
-        </h2>
-        <div className="space-y-4">
-          {cardBalances.map(({ card: c, balance }) => {
-            const util = c.credit_limit > 0 ? Math.min(100, Math.max(0, (balance / c.credit_limit) * 100)) : 0
+      {dueReminders.length > 0 && (
+        <div className="space-y-2">
+          {dueReminders.map(({ card: c, balance, dueDate, daysUntilDue }) => {
+            const urgency = daysUntilDue <= 3 ? 'urgent' : daysUntilDue <= 7 ? 'soon' : 'safe'
             return (
-              <div key={c.id} className="text-sm">
-                <div className="flex justify-between mb-1.5">
-                  <span className="font-medium text-slate-200">{c.bank_name}</span>
-                  <span className="text-slate-400">{fmt(balance)} outstanding</span>
-                </div>
-                <div className="h-2 bg-white/5 rounded-full overflow-hidden">
-                  <div
-                    className={`h-full rounded-full ${util > 80 ? 'bg-red-500' : util > 50 ? 'bg-amber-400' : 'bg-brand-500'}`}
-                    style={{ width: `${util}%` }}
-                  />
+              <div
+                key={c.id}
+                className={`flex items-center gap-3 rounded-2xl border p-3.5 ${
+                  urgency === 'urgent'
+                    ? 'bg-red-500/10 border-red-500/20'
+                    : urgency === 'soon'
+                      ? 'bg-surface-2 border-white/5'
+                      : 'bg-surface-2 border-white/5'
+                }`}
+              >
+                <span
+                  className={`w-1 self-stretch rounded-full ${
+                    urgency === 'urgent' ? 'bg-red-500' : urgency === 'soon' ? 'bg-amber-400' : 'bg-brand-500'
+                  }`}
+                />
+                <div className="flex-1 min-w-0">
+                  <div className="flex justify-between items-baseline gap-2">
+                    <span className="font-semibold text-sm text-slate-100">{c.bank_name}</span>
+                    <span
+                      className={`font-bold text-sm tabular-nums ${
+                        urgency === 'urgent' ? 'text-red-400' : urgency === 'soon' ? 'text-amber-400' : 'text-slate-200'
+                      }`}
+                    >
+                      {fmt(balance)}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <span
+                      className={`text-[10px] font-bold tracking-wide px-2 py-0.5 rounded-full ${
+                        urgency === 'urgent'
+                          ? 'bg-red-500 text-white'
+                          : urgency === 'soon'
+                            ? 'bg-amber-400 text-amber-950'
+                            : 'bg-brand-500/15 text-brand-400'
+                      }`}
+                    >
+                      {daysUntilDue < 0
+                        ? 'PAST DUE'
+                        : daysUntilDue === 0
+                          ? 'DUE TODAY'
+                          : `DUE IN ${daysUntilDue} DAY${daysUntilDue === 1 ? '' : 'S'}`}
+                    </span>
+                    <span className="text-xs text-slate-500">{format(dueDate, 'MMM d, yyyy')}</span>
+                  </div>
                 </div>
               </div>
             )
           })}
-          {cards.length === 0 && <p className="text-sm text-slate-500">No credit cards yet.</p>}
         </div>
-      </section>
+      )}
+
+      <div className="grid grid-cols-2 gap-3">
+        <Stat label="Cards Tracked" value={String(cards.length)} accent="text-brand-400" />
+        <Stat label="Available Credit" value={fmt(totalCardLimit - totalCardDebt)} accent="text-slate-200" />
+      </div>
 
       <section className="bg-surface-2 rounded-2xl border border-white/5 p-5">
         <h2 className="font-semibold mb-1">Spending This Month</h2>
