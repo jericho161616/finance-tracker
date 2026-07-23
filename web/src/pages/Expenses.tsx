@@ -6,6 +6,7 @@ import { useMoneyFormatter } from '../lib/PrivacyContext'
 import { card, input, button, secondaryButton, iconButton, editButton, listItem, label as labelClass } from '../lib/ui'
 import { useMonth, isInMonth } from '../lib/MonthContext'
 import MonthSwitcher from '../components/MonthSwitcher'
+import { parseExpenseText, type ParsedExpenseRow } from '../lib/parseExpenses'
 
 const PAYMENT_METHODS = ['cash', 'debit', 'credit_card', 'ewallet', 'bank_transfer', 'other'] as const
 
@@ -31,6 +32,13 @@ export default function Expenses() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [form, setForm] = useState(emptyForm)
   const [formError, setFormError] = useState('')
+
+  const [showImport, setShowImport] = useState(false)
+  const [importText, setImportText] = useState('')
+  const [importDate, setImportDate] = useState(new Date().toISOString().slice(0, 10))
+  const [parsedRows, setParsedRows] = useState<ParsedExpenseRow[]>([])
+  const [importing, setImporting] = useState(false)
+  const [importError, setImportError] = useState('')
 
   async function refresh() {
     const all = await api.expenses.list()
@@ -106,9 +114,213 @@ export default function Expenses() {
 
   const categoryName = (id: string | null) => categories.find((c) => c.id === id)?.name ?? '—'
 
+  function handleParse() {
+    if (!importText.trim()) return setImportError('Paste some expense lines first.')
+    setImportError('')
+    setParsedRows(parseExpenseText(importText, categories, cards, accounts))
+  }
+
+  function updateParsedRow(index: number, patch: Partial<ParsedExpenseRow>) {
+    setParsedRows((rows) => rows.map((r, i) => (i === index ? { ...r, ...patch } : r)))
+  }
+
+  function removeParsedRow(index: number) {
+    setParsedRows((rows) => rows.filter((_, i) => i !== index))
+  }
+
+  async function handleImportAll() {
+    if (!importDate) return setImportError('Please pick a date for these expenses.')
+    const bad = parsedRows.find(
+      (r) =>
+        !r.amount ||
+        r.amount <= 0 ||
+        !r.description ||
+        (r.method === 'credit_card' && !r.cardId) ||
+        (r.method !== 'credit_card' && r.method !== 'cash' && !r.accountId),
+    )
+    if (bad) return setImportError('Some rows are missing an amount, description, card, or account. Fix them before importing.')
+    setImporting(true)
+    setImportError('')
+    try {
+      for (const row of parsedRows) {
+        await api.expenses.create({
+          amount: row.amount as number,
+          category_id: row.categoryId || null,
+          payment_method: row.method,
+          credit_card_id: row.method === 'credit_card' ? row.cardId || null : null,
+          account_id: row.method !== 'credit_card' ? row.accountId || null : null,
+          description: row.description,
+          expense_date: importDate,
+        })
+      }
+      setShowImport(false)
+      setImportText('')
+      setParsedRows([])
+      refresh()
+    } catch (err) {
+      setImportError(err instanceof Error ? err.message : 'Something went wrong while importing.')
+    } finally {
+      setImporting(false)
+    }
+  }
+
   return (
     <div className="space-y-5 animate-in">
       <MonthSwitcher />
+
+      <section className={card}>
+        <div className="flex items-center justify-between mb-1">
+          <h2 className="font-semibold">Paste From Notes</h2>
+          <button type="button" className={secondaryButton} onClick={() => setShowImport((v) => !v)}>
+            {showImport ? 'Close' : 'Paste Expenses'}
+          </button>
+        </div>
+        {showImport && (
+          <div className="mt-3 space-y-3">
+            <p className="text-xs text-slate-400">
+              Paste lines like <code>Palengke - 284 (Gcash)</code>, one expense per line. We'll guess the category and
+              payment method — review before importing.
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="sm:col-span-1">
+                <label className={labelClass}>Date for these expenses</label>
+                <input
+                  type="date"
+                  value={importDate}
+                  onChange={(e) => setImportDate(e.target.value)}
+                  className={`${input} w-full`}
+                />
+              </div>
+            </div>
+            <textarea
+              value={importText}
+              onChange={(e) => setImportText(e.target.value)}
+              placeholder={'Palengke - 284 (Gcash)\nOks manok - 695 (Maya CC)\nSukiya - 493 (BPI CC)'}
+              rows={6}
+              className={`${input} w-full font-mono text-sm`}
+            />
+            <div className="flex gap-2">
+              <button type="button" className={button} onClick={handleParse}>
+                Parse Lines
+              </button>
+            </div>
+            {importError && <p className="text-sm text-red-400">{importError}</p>}
+
+            {parsedRows.length > 0 && (
+              <div className="space-y-2">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-left text-slate-400 text-xs">
+                        <th className="pb-2 pr-2">Description</th>
+                        <th className="pb-2 pr-2">Amount</th>
+                        <th className="pb-2 pr-2">Category</th>
+                        <th className="pb-2 pr-2">Method</th>
+                        <th className="pb-2 pr-2">Card / Account</th>
+                        <th className="pb-2"></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {parsedRows.map((row, i) => (
+                        <tr key={i} className="border-t border-white/5 align-top">
+                          <td className="py-1.5 pr-2">
+                            <input
+                              value={row.description}
+                              onChange={(e) => updateParsedRow(i, { description: e.target.value })}
+                              className={`${input} w-full`}
+                            />
+                            {row.error && <p className="text-xs text-red-400 mt-1">{row.error}</p>}
+                          </td>
+                          <td className="py-1.5 pr-2">
+                            <input
+                              type="number"
+                              step={0.01}
+                              value={row.amount ?? ''}
+                              onChange={(e) => updateParsedRow(i, { amount: Number(e.target.value) })}
+                              className={`${input} w-24`}
+                            />
+                          </td>
+                          <td className="py-1.5 pr-2">
+                            <select
+                              value={row.categoryId}
+                              onChange={(e) => updateParsedRow(i, { categoryId: e.target.value })}
+                              className={`${input} w-full`}
+                            >
+                              <option value="">Select…</option>
+                              {categories.map((c) => (
+                                <option key={c.id} value={c.id}>
+                                  {c.name}
+                                </option>
+                              ))}
+                            </select>
+                          </td>
+                          <td className="py-1.5 pr-2">
+                            <select
+                              value={row.method}
+                              onChange={(e) =>
+                                updateParsedRow(i, {
+                                  method: e.target.value as ParsedExpenseRow['method'],
+                                  cardId: '',
+                                  accountId: '',
+                                })
+                              }
+                              className={`${input} w-full`}
+                            >
+                              {PAYMENT_METHODS.map((m) => (
+                                <option key={m} value={m}>
+                                  {m.replace('_', ' ')}
+                                </option>
+                              ))}
+                            </select>
+                          </td>
+                          <td className="py-1.5 pr-2">
+                            {row.method === 'credit_card' && (
+                              <select
+                                value={row.cardId}
+                                onChange={(e) => updateParsedRow(i, { cardId: e.target.value })}
+                                className={`${input} w-full`}
+                              >
+                                <option value="">Select card…</option>
+                                {cards.map((c) => (
+                                  <option key={c.id} value={c.id}>
+                                    {c.bank_name}
+                                  </option>
+                                ))}
+                              </select>
+                            )}
+                            {row.method !== 'credit_card' && row.method !== 'cash' && (
+                              <select
+                                value={row.accountId}
+                                onChange={(e) => updateParsedRow(i, { accountId: e.target.value })}
+                                className={`${input} w-full`}
+                              >
+                                <option value="">Select account…</option>
+                                {accounts.map((a) => (
+                                  <option key={a.id} value={a.id}>
+                                    {a.name}
+                                  </option>
+                                ))}
+                              </select>
+                            )}
+                          </td>
+                          <td className="py-1.5">
+                            <button type="button" onClick={() => removeParsedRow(i)} className={iconButton}>
+                              <X size={14} />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <button type="button" className={button} disabled={importing} onClick={handleImportAll}>
+                  {importing ? 'Importing…' : `Import ${parsedRows.length} Expense${parsedRows.length === 1 ? '' : 's'}`}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+      </section>
 
       <section className={card}>
         <h2 className="font-semibold mb-1">{editingId ? 'Edit Expense' : 'Log an Expense'}</h2>
