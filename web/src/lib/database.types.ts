@@ -207,6 +207,39 @@ export type Database = {
         }
         Relationships: []
       }
+      income_allocations: {
+        Row: {
+          account_id: string | null
+          allocation_date: string
+          amount: number
+          bucket: string
+          created_at: string
+          id: string
+          notes: string | null
+          user_id: string
+        }
+        Insert: {
+          account_id?: string | null
+          allocation_date: string
+          amount: number
+          bucket: string
+          created_at?: string
+          id?: string
+          notes?: string | null
+          user_id?: string
+        }
+        Update: {
+          account_id?: string | null
+          allocation_date?: string
+          amount?: number
+          bucket?: string
+          created_at?: string
+          id?: string
+          notes?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       card_current_cycle: {

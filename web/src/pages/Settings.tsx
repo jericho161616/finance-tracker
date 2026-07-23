@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Target, Lightbulb, Landmark, Tag, CreditCard as CreditCardIcon, X } from 'lucide-react'
+import { Target, Lightbulb, Landmark, Tag, CreditCard as CreditCardIcon, Pencil, X } from 'lucide-react'
 import { api, type Account, type Category, type CreditCard } from '../lib/api'
 import { card, input, button, secondaryButton, label as labelClass } from '../lib/ui'
 import { getSavingsGoal, setSavingsGoal } from '../lib/savingsGoal'
@@ -15,11 +15,13 @@ export default function Settings() {
 
   const [catName, setCatName] = useState('')
   const [catKind, setCatKind] = useState<'expense' | 'income'>('expense')
+  const [catFilter, setCatFilter] = useState<'expense' | 'income'>('expense')
 
   const [cardBank, setCardBank] = useState('')
   const [cardLimit, setCardLimit] = useState(50000)
   const [cardStmtDay, setCardStmtDay] = useState(15)
   const [cardDueDay, setCardDueDay] = useState(5)
+  const [editingCardId, setEditingCardId] = useState<string | null>(null)
 
   const [goal, setGoal] = useState(0)
   const [goalSaved, setGoalSaved] = useState(false)
@@ -229,24 +231,39 @@ export default function Settings() {
           </div>
           <button className={button}>Add</button>
         </form>
-        <ul className="divide-y divide-white/5">
-          {categories.map((c) => (
-            <li key={c.id} className="py-2.5 flex justify-between items-center text-sm">
-              <span className="text-slate-200">
-                {c.name} <span className="text-slate-500">({c.kind})</span>
-              </span>
-              <button
-                onClick={async () => {
-                  await api.categories.remove(c.id)
-                  refresh()
-                }}
-                className="tap-shrink text-red-400 hover:text-red-300 text-xs"
-              >
-                Remove
-              </button>
-            </li>
+        <div className="flex gap-1 mb-3">
+          {(['expense', 'income'] as const).map((k) => (
+            <button
+              key={k}
+              onClick={() => setCatFilter(k)}
+              className={`tap-shrink text-xs font-medium px-2.5 py-1 rounded-full capitalize ${
+                catFilter === k ? 'bg-brand-600 text-white' : 'bg-white/5 text-slate-400 hover:text-slate-100'
+              }`}
+            >
+              {k}
+            </button>
           ))}
-          {categories.length === 0 && <p className="text-sm text-slate-500 py-2">No categories yet.</p>}
+        </div>
+        <ul className="divide-y divide-white/5">
+          {categories
+            .filter((c) => c.kind === catFilter)
+            .map((c) => (
+              <li key={c.id} className="py-2.5 flex justify-between items-center text-sm">
+                <span className="text-slate-200">{c.name}</span>
+                <button
+                  onClick={async () => {
+                    await api.categories.remove(c.id)
+                    refresh()
+                  }}
+                  className="tap-shrink text-red-400 hover:text-red-300 text-xs"
+                >
+                  Remove
+                </button>
+              </li>
+            ))}
+          {categories.filter((c) => c.kind === catFilter).length === 0 && (
+            <p className="text-sm text-slate-500 py-2">No {catFilter} categories yet.</p>
+          )}
         </ul>
       </section>
 
@@ -259,13 +276,22 @@ export default function Settings() {
           onSubmit={async (e) => {
             e.preventDefault()
             if (!cardBank.trim()) return
-            await api.creditCards.create({
+            const payload = {
               bank_name: cardBank.trim(),
               credit_limit: cardLimit,
               statement_day: cardStmtDay,
               due_day: cardDueDay,
-            })
+            }
+            if (editingCardId) {
+              await api.creditCards.update(editingCardId, payload)
+              setEditingCardId(null)
+            } else {
+              await api.creditCards.create(payload)
+            }
             setCardBank('')
+            setCardLimit(50000)
+            setCardStmtDay(15)
+            setCardDueDay(5)
             refresh()
           }}
         >
@@ -311,7 +337,24 @@ export default function Settings() {
               className={`${input} w-full`}
             />
           </div>
-          <button className={`${button} col-span-2 sm:col-span-4`}>Add Card</button>
+          <div className="col-span-2 sm:col-span-4 flex gap-2">
+            <button className={button}>{editingCardId ? 'Save Changes' : 'Add Card'}</button>
+            {editingCardId && (
+              <button
+                type="button"
+                className={secondaryButton}
+                onClick={() => {
+                  setEditingCardId(null)
+                  setCardBank('')
+                  setCardLimit(50000)
+                  setCardStmtDay(15)
+                  setCardDueDay(5)
+                }}
+              >
+                Cancel
+              </button>
+            )}
+          </div>
         </form>
         <ul className="divide-y divide-white/5">
           {cards.map((c) => (
@@ -320,15 +363,29 @@ export default function Settings() {
                 {c.bank_name} — limit ₱{c.credit_limit.toLocaleString()}, statement day {c.statement_day}, due day{' '}
                 {c.due_day}
               </span>
-              <button
-                onClick={async () => {
-                  await api.creditCards.remove(c.id)
-                  refresh()
-                }}
-                className="tap-shrink text-red-400 hover:text-red-300 text-xs shrink-0"
-              >
-                Remove
-              </button>
+              <span className="flex items-center gap-2 shrink-0">
+                <button
+                  onClick={() => {
+                    setEditingCardId(c.id)
+                    setCardBank(c.bank_name)
+                    setCardLimit(c.credit_limit)
+                    setCardStmtDay(c.statement_day)
+                    setCardDueDay(c.due_day)
+                  }}
+                  className="tap-shrink inline-flex text-slate-500 hover:text-brand-400"
+                >
+                  <Pencil size={14} />
+                </button>
+                <button
+                  onClick={async () => {
+                    await api.creditCards.remove(c.id)
+                    refresh()
+                  }}
+                  className="tap-shrink text-red-400 hover:text-red-300 text-xs"
+                >
+                  Remove
+                </button>
+              </span>
             </li>
           ))}
           {cards.length === 0 && <p className="text-sm text-slate-500 py-2">No cards yet.</p>}

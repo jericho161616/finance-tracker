@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
-import { LayoutDashboard, Receipt, TrendingUp, CreditCard, Settings, Lock, Wallet, Eye, EyeOff } from 'lucide-react'
+import { LayoutDashboard, Receipt, TrendingUp, CreditCard, PiggyBank, Settings, Lock, Wallet, Eye, EyeOff } from 'lucide-react'
 import { UNLOCK_KEY } from '../lib/pinGateStorage'
 import { usePrivacy } from '../lib/PrivacyContext'
 import { seedDefaultCategoriesIfEmpty } from '../lib/seedDefaults'
@@ -10,6 +10,7 @@ const navItems = [
   { to: '/expenses', label: 'Expenses', icon: Receipt },
   { to: '/income', label: 'Income', icon: TrendingUp },
   { to: '/credit-cards', label: 'Cards', icon: CreditCard },
+  { to: '/allocations', label: 'Allocate', icon: PiggyBank },
   { to: '/settings', label: 'Settings', icon: Settings },
 ]
 
@@ -71,7 +72,7 @@ export default function Layout() {
       </main>
 
       <nav className="md:hidden fixed bottom-0 inset-x-0 z-20 bg-surface-2/95 backdrop-blur border-t border-white/5 pb-[env(safe-area-inset-bottom)]">
-        <div className="max-w-5xl mx-auto grid grid-cols-5">
+        <div className="max-w-5xl mx-auto grid grid-cols-6">
           {navItems.map((item) => (
             <NavLink
               key={item.to}

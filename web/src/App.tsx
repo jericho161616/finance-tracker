@@ -7,6 +7,7 @@ import Dashboard from './pages/Dashboard'
 import Expenses from './pages/Expenses'
 import Income from './pages/Income'
 import CreditCards from './pages/CreditCards'
+import Allocations from './pages/Allocations'
 import Settings from './pages/Settings'
 
 export default function App() {
@@ -21,6 +22,7 @@ export default function App() {
                 <Route path="expenses" element={<Expenses />} />
                 <Route path="income" element={<Income />} />
                 <Route path="credit-cards" element={<CreditCards />} />
+                <Route path="allocations" element={<Allocations />} />
                 <Route path="settings" element={<Settings />} />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Route>
