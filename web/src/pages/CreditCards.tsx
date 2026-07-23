@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
 import { AlertTriangle, ChevronLeft, ChevronRight, Pencil, X } from 'lucide-react'
-import { api, type Account, type CreditCard, type CreditCardPayment, type Expense } from '../lib/api'
+import { api, type Account, type Category, type CreditCard, type CreditCardPayment, type Expense } from '../lib/api'
 import { computeCycleStatement } from '../lib/cardBalance'
 import { useMoneyFormatter } from '../lib/PrivacyContext'
 import { differenceInCalendarDays, format } from 'date-fns'
@@ -22,23 +21,36 @@ const emptyPayForm = {
   notes: '',
 }
 
+const emptyExpenseForm = {
+  date: new Date().toISOString().slice(0, 10),
+  description: '',
+  amount: 0,
+  categoryId: '',
+}
+
 export default function CreditCards() {
   const fmt = useMoneyFormatter()
   const [cards, setCards] = useState<CreditCard[]>([])
   const [payments, setPayments] = useState<CreditCardPayment[]>([])
   const [accounts, setAccounts] = useState<Account[]>([])
   const [expenses, setExpenses] = useState<Expense[]>([])
+  const [categories, setCategories] = useState<Category[]>([])
   const [cycleOffsets, setCycleOffsets] = useState<Record<string, number>>({})
 
   const [editingPaymentId, setEditingPaymentId] = useState<string | null>(null)
   const [payForm, setPayForm] = useState(emptyPayForm)
   const [formError, setFormError] = useState('')
 
+  const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null)
+  const [expenseForm, setExpenseForm] = useState(emptyExpenseForm)
+  const [expenseFormError, setExpenseFormError] = useState('')
+
   async function refresh() {
     setCards(await api.creditCards.list())
     setPayments(await api.creditCardPayments.list())
     setAccounts(await api.accounts.list())
     setExpenses(await api.expenses.list())
+    setCategories((await api.categories.list()).filter((c) => c.kind === 'expense'))
   }
 
   useEffect(() => {
@@ -88,6 +100,39 @@ export default function CreditCards() {
 
   function shiftCycle(cardId: string, delta: number) {
     setCycleOffsets((prev) => ({ ...prev, [cardId]: (prev[cardId] ?? 0) + delta }))
+  }
+
+  function startEditExpense(e: Expense) {
+    setEditingExpenseId(e.id)
+    setExpenseForm({
+      date: e.expense_date,
+      description: e.description ?? '',
+      amount: e.amount,
+      categoryId: e.category_id ?? '',
+    })
+    setExpenseFormError('')
+  }
+
+  function cancelEditExpense() {
+    setEditingExpenseId(null)
+    setExpenseForm(emptyExpenseForm)
+    setExpenseFormError('')
+  }
+
+  async function handleSaveExpense(e: React.FormEvent) {
+    e.preventDefault()
+    if (!editingExpenseId) return
+    if (!expenseForm.date) return setExpenseFormError('Please pick a date.')
+    if (expenseForm.amount <= 0) return setExpenseFormError('Please enter an amount greater than 0.')
+    setExpenseFormError('')
+    await api.expenses.update(editingExpenseId, {
+      expense_date: expenseForm.date,
+      description: expenseForm.description,
+      amount: expenseForm.amount,
+      category_id: expenseForm.categoryId || null,
+    })
+    cancelEditExpense()
+    refresh()
   }
 
   return (
@@ -274,12 +319,15 @@ export default function CreditCards() {
                             </td>
                             <td className="px-2 py-1.5 text-right whitespace-nowrap">
                               {row.kind === 'expense' ? (
-                                <Link
-                                  to={`/expenses?edit=${row.id}`}
+                                <button
+                                  onClick={() => {
+                                    const exp = expenses.find((ex) => ex.id === row.id)
+                                    if (exp) startEditExpense(exp)
+                                  }}
                                   className="tap-shrink inline-flex text-slate-500 hover:text-brand-400 mr-2"
                                 >
                                   <Pencil size={13} />
-                                </Link>
+                                </button>
                               ) : (
                                 <button
                                   onClick={() => {
@@ -315,6 +363,66 @@ export default function CreditCards() {
           </section>
         )
       })}
+
+      {editingExpenseId && (
+        <div className="fixed inset-0 z-30 bg-black/60 flex items-center justify-center p-4" onClick={cancelEditExpense}>
+          <div className={`${cardBox} w-full max-w-md`} onClick={(e) => e.stopPropagation()}>
+            <h2 className="font-semibold mb-3">Edit Expense</h2>
+            <form onSubmit={handleSaveExpense} className="grid grid-cols-2 gap-3">
+              <div>
+                <label className={labelClass}>Date</label>
+                <input
+                  type="date"
+                  value={expenseForm.date}
+                  onChange={(e) => setExpenseForm((f) => ({ ...f, date: e.target.value }))}
+                  className={`${input} w-full`}
+                />
+              </div>
+              <div>
+                <label className={labelClass}>Amount</label>
+                <input
+                  type="number"
+                  min={0}
+                  step={0.01}
+                  value={expenseForm.amount || ''}
+                  onChange={(e) => setExpenseForm((f) => ({ ...f, amount: Number(e.target.value) }))}
+                  className={`${input} w-full`}
+                />
+              </div>
+              <div className="col-span-2">
+                <label className={labelClass}>Description</label>
+                <input
+                  value={expenseForm.description}
+                  onChange={(e) => setExpenseForm((f) => ({ ...f, description: e.target.value }))}
+                  className={`${input} w-full`}
+                />
+              </div>
+              <div className="col-span-2">
+                <label className={labelClass}>Category</label>
+                <select
+                  value={expenseForm.categoryId}
+                  onChange={(e) => setExpenseForm((f) => ({ ...f, categoryId: e.target.value }))}
+                  className={`${input} w-full`}
+                >
+                  <option value="">Select…</option>
+                  {categories.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              {expenseFormError && <p className="col-span-2 text-sm text-red-400">{expenseFormError}</p>}
+              <div className="col-span-2 flex gap-2">
+                <button className={button}>Save Changes</button>
+                <button type="button" onClick={cancelEditExpense} className={secondaryButton}>
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

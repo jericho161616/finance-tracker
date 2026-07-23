@@ -9,6 +9,7 @@ export type CreditCardPayment = Tables<'credit_card_payments'>
 export type Income = Tables<'income'>
 export type CardOutstanding = Tables<'card_outstanding'>
 export type CardCurrentCycle = Tables<'card_current_cycle'>
+export type IncomeAllocation = Tables<'income_allocations'>
 
 async function unwrap<T>(promise: PromiseLike<{ data: T | null; error: { message: string } | null }>): Promise<T> {
   const { data, error } = await promise
@@ -109,5 +110,26 @@ export const api = {
       }>,
     ) => unwrap(supabase.from('income').update(row).eq('id', id).select().single()),
     remove: (id: string) => unwrap(supabase.from('income').delete().eq('id', id).select()),
+  },
+  incomeAllocations: {
+    list: () => unwrap(supabase.from('income_allocations').select('*').order('allocation_date', { ascending: false })),
+    create: (row: {
+      bucket: string
+      amount: number
+      account_id?: string | null
+      allocation_date: string
+      notes?: string
+    }) => unwrap(supabase.from('income_allocations').insert(row).select().single()),
+    update: (
+      id: string,
+      row: Partial<{
+        bucket: string
+        amount: number
+        account_id: string | null
+        allocation_date: string
+        notes: string
+      }>,
+    ) => unwrap(supabase.from('income_allocations').update(row).eq('id', id).select().single()),
+    remove: (id: string) => unwrap(supabase.from('income_allocations').delete().eq('id', id).select()),
   },
 }
