@@ -222,13 +222,18 @@ export default function CreditCards() {
 
       {cards.map((card, idx) => {
         const offset = cycleOffsets[card.id] ?? 0
-        const { cycleStart, cycleEnd, rows } = computeCycleStatement(card, expenses, payments, offset)
-        const { currentBalance, statementBalance, dueDate } = computeCardBalances(card, expenses, payments)
+        const { cycleStart, cycleEnd, dueDate: cycleDueDate, rows } = computeCycleStatement(card, expenses, payments, offset)
+        // Viewing the current (open) cycle shows today's live balance; browsing to
+        // another cycle shows a historical snapshot as of that cycle's own close date,
+        // so the hero number actually reflects the cycle you're looking at.
+        const isViewingCurrentCycle = offset === 0
+        const asOfDate = isViewingCurrentCycle ? new Date() : cycleEnd
+        const { currentBalance } = computeCardBalances(card, expenses, payments, asOfDate)
         const isCredit = currentBalance < 0
         const avail = card.credit_limit - currentBalance
         const utilization =
           card.credit_limit > 0 ? Math.min(100, Math.max(0, (currentBalance / card.credit_limit) * 100)) : 0
-        const daysUntilDue = differenceInCalendarDays(dueDate, new Date())
+        const daysUntilDue = differenceInCalendarDays(cycleDueDate, new Date())
         const gradient = CARD_GRADIENTS[idx % CARD_GRADIENTS.length]
 
         return (
@@ -236,18 +241,20 @@ export default function CreditCards() {
             <div className={`bg-gradient-to-br ${gradient} p-6 text-white`}>
               <div className="flex items-center justify-between mb-6">
                 <p className="font-semibold text-lg">{card.bank_name}</p>
-                {statementBalance > 0 && (
+                {currentBalance > 0 && (
                   <span
                     className={`text-xs font-medium px-2.5 py-1 rounded-full ${
-                      daysUntilDue <= 5 ? 'bg-red-500/90' : 'bg-white/15'
+                      isViewingCurrentCycle && daysUntilDue <= 5 ? 'bg-red-500/90' : 'bg-white/15'
                     }`}
                   >
-                    {fmt(statementBalance)} due {format(dueDate, 'MMM d')} ·{' '}
-                    {daysUntilDue >= 0 ? `${daysUntilDue}d` : 'past due'}
+                    {fmt(currentBalance)} {isViewingCurrentCycle ? 'due' : 'was due'} {format(cycleDueDate, 'MMM d')}
+                    {isViewingCurrentCycle && <> · {daysUntilDue >= 0 ? `${daysUntilDue}d` : 'past due'}</>}
                   </span>
                 )}
               </div>
-              <p className="text-white/70 text-xs">{isCredit ? 'Credit Balance' : 'Current Balance'}</p>
+              <p className="text-white/70 text-xs">
+                {isCredit ? 'Credit Balance' : isViewingCurrentCycle ? 'Current Balance' : `Balance as of ${format(cycleEnd, 'MMM d, yyyy')}`}
+              </p>
               <p className="text-3xl font-bold tracking-tight">{fmt(Math.abs(currentBalance))}</p>
               {isCredit && <p className="text-white/70 text-xs mt-1">You've overpaid — this much comes off your next bill.</p>}
               <div className="flex justify-between mt-6 text-xs text-white/70">
