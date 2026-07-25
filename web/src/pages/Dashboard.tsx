@@ -22,7 +22,7 @@ import { getBudgetCategories } from '../lib/budget'
 import { computeCardBalances } from '../lib/cardBalance'
 import { computeMonthlyExpenseTotals } from '../lib/trend'
 import { useMoneyFormatter } from '../lib/PrivacyContext'
-import { differenceInCalendarDays, format } from 'date-fns'
+import { differenceInCalendarDays, endOfMonth, format } from 'date-fns'
 
 const ALLOCATION_COLORS = ['#10b981', '#6366f1', '#f59e0b', '#ef4444', '#06b6d4', '#a855f7', '#ec4899']
 const TREND_RANGES = [
@@ -33,7 +33,7 @@ const TREND_RANGES = [
 
 export default function Dashboard() {
   const fmt = useMoneyFormatter()
-  const { selectedMonth } = useMonth()
+  const { selectedMonth, isCurrentMonth } = useMonth()
   const [expenses, setExpenses] = useState<Expense[]>([])
   const [income, setIncome] = useState<Income[]>([])
   const [cards, setCards] = useState<CreditCard[]>([])
@@ -96,11 +96,19 @@ export default function Dashboard() {
   const savingsRate = totalIncome > 0 ? Math.max(0, (netBalance / totalIncome) * 100) : 0
   const goalProgress = savingsGoal > 0 ? Math.min(100, Math.max(0, (netBalance / savingsGoal) * 100)) : 0
 
-  const cardBalances = cards.map((c) => ({ card: c, ...computeCardBalances(c, expenses, payments) }))
+  // Debt hero reflects the selected month: today's live balance when viewing the
+  // current month, or a point-in-time snapshot as of that month's end otherwise —
+  // so browsing to a past month actually shows what was owed back then.
+  const debtAsOfDate = isCurrentMonth ? new Date() : endOfMonth(selectedMonth)
+  const cardBalances = cards.map((c) => ({ card: c, ...computeCardBalances(c, expenses, payments, debtAsOfDate) }))
   const totalCardDebt = cardBalances.reduce((sum, c) => sum + Math.max(0, c.currentBalance), 0)
   const totalCardLimit = cards.reduce((sum, c) => sum + c.credit_limit, 0)
   const totalCardUtil = totalCardLimit > 0 ? Math.min(100, Math.max(0, (totalCardDebt / totalCardLimit) * 100)) : 0
-  const dueReminders = cardBalances
+
+  // Due-date reminders are always about right now — a card's due date doesn't
+  // become irrelevant just because you're browsing a past month.
+  const liveCardBalances = cards.map((c) => ({ card: c, ...computeCardBalances(c, expenses, payments) }))
+  const dueReminders = liveCardBalances
     .filter((c) => c.statementBalance > 0)
     .map((c) => ({ ...c, daysUntilDue: differenceInCalendarDays(c.dueDate, new Date()) }))
     .sort((a, b) => a.daysUntilDue - b.daysUntilDue)
@@ -204,7 +212,9 @@ export default function Dashboard() {
             <div>
               <p className="text-red-100/80 text-sm">Total Credit Card Debt</p>
               <p className="text-3xl font-bold tracking-tight mt-1">{fmt(totalCardDebt)}</p>
-              <p className="text-red-100/60 text-xs mt-1">As of today — not tied to the month switcher above</p>
+              <p className="text-red-100/60 text-xs mt-1">
+                {isCurrentMonth ? 'As of today' : `As of end of ${format(selectedMonth, 'MMMM yyyy')}`}
+              </p>
             </div>
             {totalCardLimit > 0 && (
               <span className="text-xs font-medium bg-white/15 rounded-full px-3 py-1.5 whitespace-nowrap">
@@ -234,7 +244,9 @@ export default function Dashboard() {
 
       {dueReminders.length > 0 && (
         <div className="space-y-2">
-          <p className="text-xs text-slate-500 px-1">Amount due is your statement balance — new charges since your last statement close aren't due yet.</p>
+          <p className="text-xs text-slate-500 px-1">
+            Amount due is your statement balance — always shown as of today regardless of the month selected above.
+          </p>
           {dueReminders.map(({ card: c, statementBalance, dueDate, daysUntilDue }) => {
             const urgency = daysUntilDue <= 3 ? 'urgent' : daysUntilDue <= 7 ? 'soon' : 'safe'
             return (
