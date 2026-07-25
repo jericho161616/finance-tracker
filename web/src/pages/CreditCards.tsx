@@ -224,6 +224,7 @@ export default function CreditCards() {
         const offset = cycleOffsets[card.id] ?? 0
         const { cycleStart, cycleEnd, rows } = computeCycleStatement(card, expenses, payments, offset)
         const { currentBalance, statementBalance, dueDate } = computeCardBalances(card, expenses, payments)
+        const isCredit = currentBalance < 0
         const avail = card.credit_limit - currentBalance
         const utilization =
           card.credit_limit > 0 ? Math.min(100, Math.max(0, (currentBalance / card.credit_limit) * 100)) : 0
@@ -246,8 +247,9 @@ export default function CreditCards() {
                   </span>
                 )}
               </div>
-              <p className="text-white/70 text-xs">Current Balance</p>
-              <p className="text-3xl font-bold tracking-tight">{fmt(currentBalance)}</p>
+              <p className="text-white/70 text-xs">{isCredit ? 'Credit Balance' : 'Current Balance'}</p>
+              <p className="text-3xl font-bold tracking-tight">{fmt(Math.abs(currentBalance))}</p>
+              {isCredit && <p className="text-white/70 text-xs mt-1">You've overpaid — this much comes off your next bill.</p>}
               <div className="flex justify-between mt-6 text-xs text-white/70">
                 <span>Available {fmt(avail)}</span>
                 <span>Limit {fmt(card.credit_limit)}</span>

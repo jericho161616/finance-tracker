@@ -97,7 +97,7 @@ export default function Dashboard() {
   const goalProgress = savingsGoal > 0 ? Math.min(100, Math.max(0, (netBalance / savingsGoal) * 100)) : 0
 
   const cardBalances = cards.map((c) => ({ card: c, ...computeCardBalances(c, expenses, payments) }))
-  const totalCardDebt = cardBalances.reduce((sum, c) => sum + c.currentBalance, 0)
+  const totalCardDebt = cardBalances.reduce((sum, c) => sum + Math.max(0, c.currentBalance), 0)
   const totalCardLimit = cards.reduce((sum, c) => sum + c.credit_limit, 0)
   const totalCardUtil = totalCardLimit > 0 ? Math.min(100, Math.max(0, (totalCardDebt / totalCardLimit) * 100)) : 0
   const dueReminders = cardBalances
@@ -204,7 +204,7 @@ export default function Dashboard() {
             <div>
               <p className="text-red-100/80 text-sm">Total Credit Card Debt</p>
               <p className="text-3xl font-bold tracking-tight mt-1">{fmt(totalCardDebt)}</p>
-              <p className="text-red-100/60 text-xs mt-1">Current balance — everything owed right now, all-time</p>
+              <p className="text-red-100/60 text-xs mt-1">As of today — not tied to the month switcher above</p>
             </div>
             {totalCardLimit > 0 && (
               <span className="text-xs font-medium bg-white/15 rounded-full px-3 py-1.5 whitespace-nowrap">
@@ -214,6 +214,7 @@ export default function Dashboard() {
           </div>
           <div className="mt-5 space-y-2.5">
             {cardBalances.map(({ card: c, currentBalance }) => {
+              const isCredit = currentBalance < 0
               const util = c.credit_limit > 0 ? Math.min(100, Math.max(0, (currentBalance / c.credit_limit) * 100)) : 0
               return (
                 <div key={c.id} className="flex items-center gap-3 text-sm">
@@ -221,7 +222,9 @@ export default function Dashboard() {
                   <div className="flex-1 h-1.5 bg-white/15 rounded-full overflow-hidden">
                     <div className="h-full rounded-full bg-red-200" style={{ width: `${util}%` }} />
                   </div>
-                  <span className="w-24 shrink-0 text-right text-red-50/95 tabular-nums">{fmt(currentBalance)}</span>
+                  <span className="w-28 shrink-0 text-right text-red-50/95 tabular-nums">
+                    {isCredit ? `${fmt(Math.abs(currentBalance))} credit` : fmt(currentBalance)}
+                  </span>
                 </div>
               )
             })}
