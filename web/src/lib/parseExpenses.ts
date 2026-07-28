@@ -5,6 +5,7 @@ export type PaymentMethod = (typeof PAYMENT_METHODS)[number]
 
 export type ParsedExpenseRow = {
   raw: string
+  date: string
   description: string
   amount: number | null
   method: PaymentMethod
@@ -15,6 +16,49 @@ export type ParsedExpenseRow = {
 }
 
 const LINE_RE = /^(.+?)\s*[-–—]\s*([\d,]+(?:\.\d+)?)\s*(?:\((.+?)\))?\s*$/
+
+// Matches an optional leading date like "7-29", "7/29/2026", or "2026-07-29" at the
+// start of a line, followed by whitespace and the rest of the entry.
+const LEADING_DATE_RE = /^(\d{1,4})[/-](\d{1,2})(?:[/-](\d{1,4}))?\s+(.*)$/
+
+function parseLeadingDate(line: string, defaultDate: string): { date: string; rest: string } | null {
+  const m = line.match(LEADING_DATE_RE)
+  if (!m) return null
+  const [, aStr, bStr, cStr, rest] = m
+  const a = Number(aStr)
+  const b = Number(bStr)
+  const defaultYear = Number(defaultDate.slice(0, 4)) || new Date().getFullYear()
+
+  let year: number
+  let month: number
+  let day: number
+  if (cStr !== undefined) {
+    const c = Number(cStr)
+    if (aStr.length === 4) {
+      year = a
+      month = b
+      day = c
+    } else if (cStr.length === 4) {
+      year = c
+      month = a
+      day = b
+    } else {
+      year = 2000 + c
+      month = a
+      day = b
+    }
+  } else {
+    month = a
+    day = b
+    year = defaultYear
+  }
+
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null
+
+  const mm = String(month).padStart(2, '0')
+  const dd = String(day).padStart(2, '0')
+  return { date: `${year}-${mm}-${dd}`, rest }
+}
 
 const CATEGORY_KEYWORDS: Record<string, string[]> = {
   groceries: ['palengke', 'market', 'supermarket', 'grocery', 'wet market', 'sari-sari', 'sari sari'],
@@ -100,17 +144,23 @@ export function parseExpenseText(
   categories: Category[],
   cards: CreditCard[],
   accounts: Account[],
+  defaultDate: string,
 ): ParsedExpenseRow[] {
   return text
     .split('\n')
     .map((line) => line.trim())
     .filter(Boolean)
     .map((raw) => {
-      const match = raw.match(LINE_RE)
+      const leading = parseLeadingDate(raw, defaultDate)
+      const date = leading?.date ?? defaultDate
+      const lineToMatch = leading?.rest ?? raw
+
+      const match = lineToMatch.match(LINE_RE)
       if (!match) {
         return {
           raw,
-          description: raw,
+          date,
+          description: lineToMatch,
           amount: null,
           method: 'cash' as PaymentMethod,
           cardId: '',
@@ -125,6 +175,6 @@ export function parseExpenseText(
       const { method, cardId, accountId } = guessPaymentMethod(tagRaw ?? '', cards, accounts)
       const categoryId = guessCategoryId(description, categories)
 
-      return { raw, description, amount, method, cardId, accountId, categoryId }
+      return { raw, date, description, amount, method, cardId, accountId, categoryId }
     })
 }
