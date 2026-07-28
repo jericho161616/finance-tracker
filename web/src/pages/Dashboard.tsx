@@ -13,7 +13,7 @@ import {
   ReferenceLine,
   Legend,
 } from 'recharts'
-import { Target, Lightbulb, TrendingUp, TrendingDown, ChevronDown, PiggyBank } from 'lucide-react'
+import { Target, Lightbulb, TrendingUp, TrendingDown, ChevronDown, PiggyBank, Check, AlertTriangle } from 'lucide-react'
 import { api, type Category, type CreditCard, type CreditCardPayment, type Expense, type Income, type IncomeAllocation } from '../lib/api'
 import { useMonth, isInMonth } from '../lib/MonthContext'
 import MonthSwitcher from '../components/MonthSwitcher'
@@ -43,7 +43,7 @@ export default function Dashboard() {
   const [savingsGoal, setSavingsGoalState] = useState(0)
   const [budgetCategories, setBudgetCategoriesState] = useState(getBudgetCategories())
   const [trendMonths, setTrendMonths] = useState<3 | 6 | 12>(3)
-  const [showSuggestedAllocation, setShowSuggestedAllocation] = useState(false)
+  const [showReference, setShowReference] = useState(false)
 
   useEffect(() => {
     Promise.all([
@@ -108,8 +108,7 @@ export default function Dashboard() {
   // Due-date reminders are always about right now — a card's due date doesn't
   // become irrelevant just because you're browsing a past month.
   const liveCardBalances = cards.map((c) => ({ card: c, ...computeCardBalances(c, expenses, payments) }))
-  const dueReminders = liveCardBalances
-    .filter((c) => c.statementBalance > 0)
+  const cardStatusList = liveCardBalances
     .map((c) => ({ ...c, daysUntilDue: differenceInCalendarDays(c.dueDate, new Date()) }))
     .sort((a, b) => a.daysUntilDue - b.daysUntilDue)
 
@@ -168,193 +167,270 @@ export default function Dashboard() {
     <div className="space-y-5 animate-in">
       <MonthSwitcher />
 
-      <div className="rounded-3xl p-6 bg-gradient-to-br from-brand-600 via-brand-700 to-emerald-900 shadow-lg shadow-brand-900/30 text-white">
-        <p className="text-brand-100/80 text-sm">Saved This Month</p>
-        <p className="text-4xl font-bold tracking-tight mt-1">{fmt(netBalance)}</p>
-        <div className="flex gap-2 mt-5">
-          <span className="flex items-center gap-1.5 bg-white/10 rounded-full px-3 py-1.5 text-xs font-medium">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-300" /> Income {fmt(totalIncome)}
-          </span>
-          <span className="flex items-center gap-1.5 bg-white/10 rounded-full px-3 py-1.5 text-xs font-medium">
-            <span className="w-1.5 h-1.5 rounded-full bg-red-300" /> Cash-out {fmt(cashOutflow)}
-          </span>
-        </div>
-        {totalIncome > 0 && (
-          <p className="text-xs text-brand-100/70 mt-3">Savings rate: {savingsRate.toFixed(0)}% of income</p>
-        )}
-      </div>
-
-      {savingsGoal > 0 && (
-        <section className="bg-surface-2 rounded-2xl border border-white/5 p-5">
-          <div className="flex justify-between items-baseline mb-2">
-            <h2 className="font-semibold flex items-center gap-1.5">
-              <Target size={16} className="text-brand-400" /> Savings Goal
-            </h2>
-            <span className="text-xs text-slate-400">
-              {fmt(Math.max(netBalance, 0))} / {fmt(savingsGoal)}
+      {/* RIGHT NOW — always open: today's money, and anything needing action */}
+      <ZoneLabel>Right Now</ZoneLabel>
+      <div className="space-y-3">
+        <div className="rounded-3xl p-6 bg-gradient-to-br from-brand-600 via-brand-700 to-emerald-900 shadow-lg shadow-brand-900/30 text-white">
+          <p className="text-brand-100/80 text-sm">Saved This Month</p>
+          <p className="text-4xl font-bold tracking-tight mt-1">{fmt(netBalance)}</p>
+          <div className="flex gap-2 mt-5">
+            <span className="flex items-center gap-1.5 bg-white/10 rounded-full px-3 py-1.5 text-xs font-medium">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-300" /> Income {fmt(totalIncome)}
+            </span>
+            <span className="flex items-center gap-1.5 bg-white/10 rounded-full px-3 py-1.5 text-xs font-medium">
+              <span className="w-1.5 h-1.5 rounded-full bg-red-300" /> Cash-out {fmt(cashOutflow)}
             </span>
           </div>
-          <div className="h-2.5 bg-white/5 rounded-full overflow-hidden">
-            <div
-              className={`h-full rounded-full ${goalProgress >= 100 ? 'bg-brand-400' : 'bg-brand-600'}`}
-              style={{ width: `${goalProgress}%` }}
-            />
-          </div>
-          <p className="text-xs text-slate-500 mt-2">
-            {goalProgress >= 100 ? "You've hit your savings goal this month!" : `${goalProgress.toFixed(0)}% of the way there`}
-          </p>
-        </section>
-      )}
-
-      {cards.length > 0 && (
-        <div className="rounded-3xl p-6 bg-gradient-to-br from-red-800 via-red-900 to-rose-950 shadow-lg shadow-red-950/30 text-white">
-          <div className="flex justify-between items-start">
-            <div>
-              <p className="text-red-100/80 text-sm">Total Credit Card Debt</p>
-              <p className="text-3xl font-bold tracking-tight mt-1">{fmt(totalCardDebt)}</p>
-              <p className="text-red-100/60 text-xs mt-1">
-                {isCurrentMonth ? 'As of today' : `As of end of ${format(selectedMonth, 'MMMM yyyy')}`}
-              </p>
-            </div>
-            {totalCardLimit > 0 && (
-              <span className="text-xs font-medium bg-white/15 rounded-full px-3 py-1.5 whitespace-nowrap">
-                {totalCardUtil.toFixed(0)}% of {fmt(totalCardLimit)} limit
-              </span>
-            )}
-          </div>
-          <div className="mt-5 space-y-2.5">
-            {cardBalances.map(({ card: c, currentBalance }) => {
-              const isCredit = currentBalance < 0
-              const util = c.credit_limit > 0 ? Math.min(100, Math.max(0, (currentBalance / c.credit_limit) * 100)) : 0
-              return (
-                <div key={c.id} className="flex items-center gap-3 text-sm">
-                  <span className="w-14 shrink-0 font-medium text-red-50/90">{c.bank_name}</span>
-                  <div className="flex-1 h-1.5 bg-white/15 rounded-full overflow-hidden">
-                    <div className="h-full rounded-full bg-red-200" style={{ width: `${util}%` }} />
-                  </div>
-                  <span className="w-28 shrink-0 text-right text-red-50/95 tabular-nums">
-                    {isCredit ? `${fmt(Math.abs(currentBalance))} credit` : fmt(currentBalance)}
-                  </span>
-                </div>
-              )
-            })}
-          </div>
+          {totalIncome > 0 && (
+            <p className="text-xs text-brand-100/70 mt-3">Savings rate: {savingsRate.toFixed(0)}% of income</p>
+          )}
         </div>
-      )}
 
-      {dueReminders.length > 0 && (
-        <div className="space-y-2">
-          <p className="text-xs text-slate-500 px-1">
-            Amount due is your statement balance — always shown as of today regardless of the month selected above.
-          </p>
-          {dueReminders.map(({ card: c, statementBalance, dueDate, daysUntilDue }) => {
-            const urgency = daysUntilDue <= 3 ? 'urgent' : daysUntilDue <= 7 ? 'soon' : 'safe'
-            return (
+        {savingsGoal > 0 && (
+          <section className="bg-surface-2 rounded-2xl border border-white/5 p-5">
+            <div className="flex justify-between items-baseline mb-2">
+              <h2 className="font-semibold flex items-center gap-1.5">
+                <Target size={16} className="text-brand-400" /> Savings Goal
+              </h2>
+              <span className="text-xs text-slate-400">
+                {fmt(Math.max(netBalance, 0))} / {fmt(savingsGoal)}
+              </span>
+            </div>
+            <div className="h-2.5 bg-white/5 rounded-full overflow-hidden">
               <div
-                key={c.id}
-                className={`flex items-center gap-3 rounded-2xl border p-3.5 ${
-                  urgency === 'urgent'
-                    ? 'bg-red-500/10 border-red-500/20'
-                    : urgency === 'soon'
-                      ? 'bg-surface-2 border-white/5'
-                      : 'bg-surface-2 border-white/5'
-                }`}
-              >
-                <span
-                  className={`w-1 self-stretch rounded-full ${
-                    urgency === 'urgent' ? 'bg-red-500' : urgency === 'soon' ? 'bg-amber-400' : 'bg-brand-500'
-                  }`}
-                />
-                <div className="flex-1 min-w-0">
-                  <div className="flex justify-between items-baseline gap-2">
-                    <span className="font-semibold text-sm text-slate-100">{c.bank_name}</span>
-                    <span
-                      className={`font-bold text-sm tabular-nums ${
-                        urgency === 'urgent' ? 'text-red-400' : urgency === 'soon' ? 'text-amber-400' : 'text-slate-200'
-                      }`}
-                    >
-                      {fmt(statementBalance)}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2 mt-0.5">
-                    <span
-                      className={`text-[10px] font-bold tracking-wide px-2 py-0.5 rounded-full ${
-                        urgency === 'urgent'
-                          ? 'bg-red-500 text-white'
-                          : urgency === 'soon'
-                            ? 'bg-amber-400 text-amber-950'
-                            : 'bg-brand-500/15 text-brand-400'
-                      }`}
-                    >
-                      {daysUntilDue < 0
-                        ? 'PAST DUE'
-                        : daysUntilDue === 0
-                          ? 'DUE TODAY'
-                          : `DUE IN ${daysUntilDue} DAY${daysUntilDue === 1 ? '' : 'S'}`}
-                    </span>
-                    <span className="text-xs text-slate-500">{format(dueDate, 'MMM d, yyyy')}</span>
-                  </div>
+                className={`h-full rounded-full ${goalProgress >= 100 ? 'bg-brand-400' : 'bg-brand-600'}`}
+                style={{ width: `${goalProgress}%` }}
+              />
+            </div>
+            <p className="text-xs text-slate-500 mt-2">
+              {goalProgress >= 100 ? "You've hit your savings goal this month!" : `${goalProgress.toFixed(0)}% of the way there`}
+            </p>
+          </section>
+        )}
+
+        {cardStatusList.map(({ card: c, statementBalance, currentBalance, dueDate, daysUntilDue }) => {
+          if (statementBalance <= 0) {
+            const leftover = currentBalance > 0 ? currentBalance : 0
+            return (
+              <div key={c.id} className="flex items-start gap-3 rounded-2xl border border-brand-500/20 bg-brand-500/10 p-3.5">
+                <span className="w-7 h-7 rounded-lg bg-brand-500/20 text-brand-400 flex items-center justify-center shrink-0">
+                  <Check size={15} />
+                </span>
+                <div>
+                  <p className="font-semibold text-sm text-slate-100">{c.bank_name} is fully paid</p>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    {leftover > 0
+                      ? `Nothing due right now — ${fmt(leftover)} in new charges not billed yet`
+                      : 'Nothing due right now'}
+                  </p>
                 </div>
               </div>
             )
-          })}
-        </div>
-      )}
-
-      <div className="grid grid-cols-2 gap-3">
-        <Stat label="New Charges This Month" value={fmt(newChargesThisMonth)} accent="text-amber-400" />
-        <Stat label="Cards Tracked" value={String(cards.length)} accent="text-brand-400" />
-        <Stat label="Available Credit" value={fmt(totalCardLimit - totalCardDebt)} accent="text-slate-200" />
-        <Stat label="Overall Utilization" value={`${totalCardUtil.toFixed(0)}%`} accent="text-slate-200" />
+          }
+          const urgency = daysUntilDue <= 3 ? 'urgent' : daysUntilDue <= 7 ? 'soon' : 'safe'
+          return (
+            <div
+              key={c.id}
+              className={`flex items-center gap-3 rounded-2xl border p-3.5 ${
+                urgency === 'urgent' ? 'bg-red-500/10 border-red-500/20' : 'bg-surface-2 border-white/5'
+              }`}
+            >
+              <span
+                className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${
+                  urgency === 'urgent'
+                    ? 'bg-red-500/20 text-red-400'
+                    : urgency === 'soon'
+                      ? 'bg-amber-400/20 text-amber-400'
+                      : 'bg-white/5 text-slate-400'
+                }`}
+              >
+                <AlertTriangle size={14} />
+              </span>
+              <div className="flex-1 min-w-0">
+                <div className="flex justify-between items-baseline gap-2">
+                  <span className="font-semibold text-sm text-slate-100">{c.bank_name}</span>
+                  <span
+                    className={`font-bold text-sm tabular-nums ${
+                      urgency === 'urgent' ? 'text-red-400' : urgency === 'soon' ? 'text-amber-400' : 'text-slate-200'
+                    }`}
+                  >
+                    {fmt(statementBalance)}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <span
+                    className={`text-[10px] font-bold tracking-wide px-2 py-0.5 rounded-full ${
+                      urgency === 'urgent'
+                        ? 'bg-red-500 text-white'
+                        : urgency === 'soon'
+                          ? 'bg-amber-400 text-amber-950'
+                          : 'bg-brand-500/15 text-brand-400'
+                    }`}
+                  >
+                    {daysUntilDue < 0
+                      ? 'PAST DUE'
+                      : daysUntilDue === 0
+                        ? 'DUE TODAY'
+                        : `DUE IN ${daysUntilDue} DAY${daysUntilDue === 1 ? '' : 'S'}`}
+                  </span>
+                  <span className="text-xs text-slate-500">{format(dueDate, 'MMM d, yyyy')}</span>
+                </div>
+              </div>
+            </div>
+          )
+        })}
       </div>
 
-      <section className="bg-surface-2 rounded-2xl border border-white/5 p-5">
-        <h2 className="font-semibold mb-1">Spending This Month</h2>
-        <p className="text-xs text-slate-500 mb-4">
-          Total: {fmt(totalExpenses)} · includes credit card swipes the moment they're made
-        </p>
-        {spendingChartData.length === 0 ? (
-          <p className="text-sm text-slate-500">No expenses logged this month.</p>
-        ) : (
-          <div style={{ width: '100%', height: Math.max(120, spendingChartData.length * 40) }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={spendingChartData} layout="vertical" margin={{ left: 8, right: 16 }}>
-                <XAxis type="number" hide />
-                <YAxis
-                  type="category"
-                  dataKey="name"
-                  width={110}
-                  tick={{ fill: '#cbd5e1', fontSize: 12 }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <Tooltip
-                  formatter={(value) => fmt(Number(value))}
-                  cursor={{ fill: 'rgba(255,255,255,0.04)' }}
-                  contentStyle={{ background: '#16211a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, fontSize: 12 }}
-                  itemStyle={{ color: '#e2e8f0' }}
-                  labelStyle={{ color: '#94a3b8' }}
-                />
-                <Bar dataKey="amount" fill="#10b981" radius={[0, 6, 6, 0]} barSize={18} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        )}
-      </section>
+      {/* THIS MONTH — checked regularly, not urgent */}
+      <ZoneLabel>This Month</ZoneLabel>
+      <div className="space-y-3">
+        <Stat label="New Charges This Month" value={fmt(newChargesThisMonth)} accent="text-amber-400" />
 
-      {totalIncome > 0 && budgetTotal > 0 && (
         <section className="bg-surface-2 rounded-2xl border border-white/5 p-5">
-          <button
-            onClick={() => setShowSuggestedAllocation((v) => !v)}
-            className="tap-shrink w-full flex items-center justify-between"
-          >
-            <h2 className="font-semibold flex items-center gap-1.5">
-              <Lightbulb size={16} className="text-brand-400" /> Suggested Allocation
+          <h2 className="font-semibold mb-1">Spending This Month</h2>
+          <p className="text-xs text-slate-500 mb-4">
+            Total: {fmt(totalExpenses)} · includes credit card swipes the moment they're made
+          </p>
+          {spendingChartData.length === 0 ? (
+            <p className="text-sm text-slate-500">No expenses logged this month.</p>
+          ) : (
+            <div style={{ width: '100%', height: Math.max(120, spendingChartData.length * 40) }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={spendingChartData} layout="vertical" margin={{ left: 8, right: 16 }}>
+                  <XAxis type="number" hide />
+                  <YAxis
+                    type="category"
+                    dataKey="name"
+                    width={110}
+                    tick={{ fill: '#cbd5e1', fontSize: 12 }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <Tooltip
+                    formatter={(value) => fmt(Number(value))}
+                    cursor={{ fill: 'rgba(255,255,255,0.04)' }}
+                    contentStyle={{ background: '#16211a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, fontSize: 12 }}
+                    itemStyle={{ color: '#e2e8f0' }}
+                    labelStyle={{ color: '#94a3b8' }}
+                  />
+                  <Bar dataKey="amount" fill="#10b981" radius={[0, 6, 6, 0]} barSize={18} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </section>
+
+        {totalIncome > 0 && (
+          <section className="bg-surface-2 rounded-2xl border border-white/5 p-5">
+            <h2 className="font-semibold mb-1 flex items-center gap-1.5">
+              <PiggyBank size={16} className="text-brand-400" /> Actual Allocation
             </h2>
-            <ChevronDown size={16} className={`text-slate-400 transition-transform ${showSuggestedAllocation ? 'rotate-180' : ''}`} />
-          </button>
-          {showSuggestedAllocation && (
-            <>
+            <p className="text-xs text-slate-500 mb-4">
+              {fmt(totalAllocated)} tracked this month ({fmt(monthAllocations.reduce((sum, a) => sum + a.amount, 0))}{' '}
+              logged manually, {fmt(bucketedExpenses.reduce((sum, e) => sum + e.amount, 0))} from tagged expenses) ·{' '}
+              {fmt(Math.max(unallocated, 0))} not yet allocated —{' '}
+              <Link to="/allocations" className="text-brand-400 hover:text-brand-300">
+                log it
+              </Link>
+            </p>
+            {monthAllocations.length === 0 && bucketedExpenses.length === 0 ? (
+              <p className="text-sm text-slate-500">
+                No allocations tracked this month yet. Log a transfer on the Allocations page, or tag expense
+                categories with a budget bucket in Settings.
+              </p>
+            ) : (
+              <div style={{ width: '100%', height: Math.max(140, actualVsPlanned.length * 44) }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={actualVsPlanned} layout="vertical" margin={{ left: 8, right: 16 }}>
+                    <XAxis type="number" hide />
+                    <YAxis
+                      type="category"
+                      dataKey="name"
+                      width={100}
+                      tick={{ fill: '#cbd5e1', fontSize: 12 }}
+                      axisLine={false}
+                      tickLine={false}
+                    />
+                    <Tooltip
+                      formatter={(value) => fmt(Number(value))}
+                      cursor={{ fill: 'rgba(255,255,255,0.04)' }}
+                      contentStyle={{ background: '#16211a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, fontSize: 12 }}
+                      itemStyle={{ color: '#e2e8f0' }}
+                      labelStyle={{ color: '#94a3b8' }}
+                    />
+                    <Legend wrapperStyle={{ fontSize: 12 }} />
+                    <Bar dataKey="planned" name="Planned" fill="rgba(148,163,184,0.4)" radius={[0, 6, 6, 0]} barSize={12} />
+                    <Bar dataKey="actual" name="Actual" fill="#10b981" radius={[0, 6, 6, 0]} barSize={12} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </section>
+        )}
+      </div>
+
+      {/* REFERENCE — collapsed by default: debt detail, plan, trend */}
+      <ZoneLabel>Reference</ZoneLabel>
+      <button
+        onClick={() => setShowReference((v) => !v)}
+        className="tap-shrink w-full flex items-center justify-between bg-surface-2 border border-white/5 rounded-2xl px-4 py-3.5"
+      >
+        <span className="font-semibold text-sm">Debt breakdown, suggested plan &amp; trend</span>
+        <span className="flex items-center gap-1.5 text-xs text-slate-400">
+          {showReference ? 'Hide' : 'Show'}
+          <ChevronDown size={14} className={`transition-transform ${showReference ? 'rotate-180' : ''}`} />
+        </span>
+      </button>
+
+      {showReference && (
+        <div className="space-y-3 mt-3">
+          {cards.length > 0 && (
+            <div className="rounded-3xl p-6 bg-gradient-to-br from-red-800 via-red-900 to-rose-950 shadow-lg shadow-red-950/30 text-white">
+              <div className="flex justify-between items-start">
+                <div>
+                  <p className="text-red-100/80 text-sm">Total Credit Card Debt</p>
+                  <p className="text-3xl font-bold tracking-tight mt-1">{fmt(totalCardDebt)}</p>
+                  <p className="text-red-100/60 text-xs mt-1">
+                    {isCurrentMonth ? 'As of today' : `As of end of ${format(selectedMonth, 'MMMM yyyy')}`}
+                  </p>
+                </div>
+                {totalCardLimit > 0 && (
+                  <span className="text-xs font-medium bg-white/15 rounded-full px-3 py-1.5 whitespace-nowrap">
+                    {totalCardUtil.toFixed(0)}% of {fmt(totalCardLimit)} limit
+                  </span>
+                )}
+              </div>
+              <div className="mt-5 space-y-2.5">
+                {cardBalances.map(({ card: c, currentBalance }) => {
+                  const isCredit = currentBalance < 0
+                  const util = c.credit_limit > 0 ? Math.min(100, Math.max(0, (currentBalance / c.credit_limit) * 100)) : 0
+                  return (
+                    <div key={c.id} className="flex items-center gap-3 text-sm">
+                      <span className="w-14 shrink-0 font-medium text-red-50/90">{c.bank_name}</span>
+                      <div className="flex-1 h-1.5 bg-white/15 rounded-full overflow-hidden">
+                        <div className="h-full rounded-full bg-red-200" style={{ width: `${util}%` }} />
+                      </div>
+                      <span className="w-28 shrink-0 text-right text-red-50/95 tabular-nums">
+                        {isCredit ? `${fmt(Math.abs(currentBalance))} credit` : fmt(currentBalance)}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 gap-3">
+            <Stat label="Cards Tracked" value={String(cards.length)} accent="text-brand-400" />
+            <Stat label="Available Credit" value={fmt(totalCardLimit - totalCardDebt)} accent="text-slate-200" />
+            <Stat label="Overall Utilization" value={`${totalCardUtil.toFixed(0)}%`} accent="text-slate-200" />
+          </div>
+
+          {totalIncome > 0 && budgetTotal > 0 && (
+            <section className="bg-surface-2 rounded-2xl border border-white/5 p-5">
+              <h2 className="font-semibold flex items-center gap-1.5 mb-1">
+                <Lightbulb size={16} className="text-brand-400" /> Suggested Allocation
+              </h2>
               <p className="text-xs text-slate-400 mt-1 mb-4">
                 Based on this month's income of {fmt(totalIncome)}. Adjust the plan in Settings.
               </p>
@@ -395,42 +471,38 @@ export default function Dashboard() {
                   Your allocation percentages add up to {budgetTotal}%, not 100 — adjust them in Settings.
                 </p>
               )}
-            </>
+            </section>
           )}
-        </section>
-      )}
 
-      {totalIncome > 0 && (
-        <section className="bg-surface-2 rounded-2xl border border-white/5 p-5">
-          <h2 className="font-semibold mb-1 flex items-center gap-1.5">
-            <PiggyBank size={16} className="text-brand-400" /> Actual Allocation
-          </h2>
-          <p className="text-xs text-slate-500 mb-4">
-            {fmt(totalAllocated)} tracked this month ({fmt(monthAllocations.reduce((sum, a) => sum + a.amount, 0))} logged
-            manually, {fmt(bucketedExpenses.reduce((sum, e) => sum + e.amount, 0))} from tagged expenses) ·{' '}
-            {fmt(Math.max(unallocated, 0))} not yet allocated —{' '}
-            <Link to="/allocations" className="text-brand-400 hover:text-brand-300">
-              log it
-            </Link>
-          </p>
-          {monthAllocations.length === 0 && bucketedExpenses.length === 0 ? (
-            <p className="text-sm text-slate-500">
-              No allocations tracked this month yet. Log a transfer on the Allocations page, or tag expense categories
-              with a budget bucket in Settings.
-            </p>
-          ) : (
-            <div style={{ width: '100%', height: Math.max(140, actualVsPlanned.length * 44) }}>
+          <section className="bg-surface-2 rounded-2xl border border-white/5 p-5">
+            <div className="flex items-center justify-between mb-1">
+              <h2 className="font-semibold">Expense Trend</h2>
+              <div className="flex gap-1">
+                {TREND_RANGES.map((r) => (
+                  <button
+                    key={r.label}
+                    onClick={() => setTrendMonths(r.months)}
+                    className={`tap-shrink text-xs font-medium px-2.5 py-1 rounded-full ${
+                      trendMonths === r.months ? 'bg-brand-600 text-white' : 'bg-white/5 text-slate-400 hover:text-slate-100'
+                    }`}
+                  >
+                    {r.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {monthOverMonthDelta !== null && (
+              <p className={`text-xs mb-3 flex items-center gap-1 ${monthOverMonthDelta > 0 ? 'text-red-400' : 'text-brand-400'}`}>
+                {monthOverMonthDelta > 0 ? <TrendingUp size={13} /> : <TrendingDown size={13} />}
+                {Math.abs(monthOverMonthDelta).toFixed(0)}% {monthOverMonthDelta > 0 ? 'higher' : 'lower'} than last month
+              </p>
+            )}
+            <div style={{ width: '100%', height: 180 }}>
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={actualVsPlanned} layout="vertical" margin={{ left: 8, right: 16 }}>
-                  <XAxis type="number" hide />
-                  <YAxis
-                    type="category"
-                    dataKey="name"
-                    width={100}
-                    tick={{ fill: '#cbd5e1', fontSize: 12 }}
-                    axisLine={false}
-                    tickLine={false}
-                  />
+                <BarChart data={trendData} margin={{ left: -20, right: 8, top: 8 }}>
+                  <XAxis dataKey="label" tick={{ fill: '#94a3b8', fontSize: 12 }} axisLine={false} tickLine={false} />
+                  <YAxis hide />
+                  <ReferenceLine y={trendAverage} stroke="rgba(148,163,184,0.4)" strokeDasharray="4 4" />
                   <Tooltip
                     formatter={(value) => fmt(Number(value))}
                     cursor={{ fill: 'rgba(255,255,255,0.04)' }}
@@ -438,58 +510,23 @@ export default function Dashboard() {
                     itemStyle={{ color: '#e2e8f0' }}
                     labelStyle={{ color: '#94a3b8' }}
                   />
-                  <Legend wrapperStyle={{ fontSize: 12 }} />
-                  <Bar dataKey="planned" name="Planned" fill="rgba(148,163,184,0.4)" radius={[0, 6, 6, 0]} barSize={12} />
-                  <Bar dataKey="actual" name="Actual" fill="#10b981" radius={[0, 6, 6, 0]} barSize={12} />
+                  <Bar dataKey="total" fill="#10b981" radius={[6, 6, 0, 0]} barSize={trendMonths > 6 ? 12 : 28} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
-          )}
-        </section>
+            <p className="text-xs text-slate-500 mt-2">Dashed line marks your {trendMonths}-month average.</p>
+          </section>
+        </div>
       )}
+    </div>
+  )
+}
 
-      <section className="bg-surface-2 rounded-2xl border border-white/5 p-5">
-        <div className="flex items-center justify-between mb-1">
-          <h2 className="font-semibold">Expense Trend</h2>
-          <div className="flex gap-1">
-            {TREND_RANGES.map((r) => (
-              <button
-                key={r.label}
-                onClick={() => setTrendMonths(r.months)}
-                className={`tap-shrink text-xs font-medium px-2.5 py-1 rounded-full ${
-                  trendMonths === r.months ? 'bg-brand-600 text-white' : 'bg-white/5 text-slate-400 hover:text-slate-100'
-                }`}
-              >
-                {r.label}
-              </button>
-            ))}
-          </div>
-        </div>
-        {monthOverMonthDelta !== null && (
-          <p className={`text-xs mb-3 flex items-center gap-1 ${monthOverMonthDelta > 0 ? 'text-red-400' : 'text-brand-400'}`}>
-            {monthOverMonthDelta > 0 ? <TrendingUp size={13} /> : <TrendingDown size={13} />}
-            {Math.abs(monthOverMonthDelta).toFixed(0)}% {monthOverMonthDelta > 0 ? 'higher' : 'lower'} than last month
-          </p>
-        )}
-        <div style={{ width: '100%', height: 180 }}>
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={trendData} margin={{ left: -20, right: 8, top: 8 }}>
-              <XAxis dataKey="label" tick={{ fill: '#94a3b8', fontSize: 12 }} axisLine={false} tickLine={false} />
-              <YAxis hide />
-              <ReferenceLine y={trendAverage} stroke="rgba(148,163,184,0.4)" strokeDasharray="4 4" />
-              <Tooltip
-                formatter={(value) => fmt(Number(value))}
-                cursor={{ fill: 'rgba(255,255,255,0.04)' }}
-                contentStyle={{ background: '#16211a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, fontSize: 12 }}
-                itemStyle={{ color: '#e2e8f0' }}
-                labelStyle={{ color: '#94a3b8' }}
-              />
-              <Bar dataKey="total" fill="#10b981" radius={[6, 6, 0, 0]} barSize={trendMonths > 6 ? 12 : 28} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-        <p className="text-xs text-slate-500 mt-2">Dashed line marks your {trendMonths}-month average.</p>
-      </section>
+function ZoneLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex items-center gap-2.5 pt-1">
+      <span className="text-[11px] font-bold uppercase tracking-widest text-slate-500 whitespace-nowrap">{children}</span>
+      <span className="flex-1 h-px bg-white/5" />
     </div>
   )
 }
