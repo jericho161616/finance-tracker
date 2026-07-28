@@ -117,7 +117,7 @@ export default function Expenses() {
   function handleParse() {
     if (!importText.trim()) return setImportError('Paste some expense lines first.')
     setImportError('')
-    setParsedRows(parseExpenseText(importText, categories, cards, accounts))
+    setParsedRows(parseExpenseText(importText, categories, cards, accounts, importDate))
   }
 
   function updateParsedRow(index: number, patch: Partial<ParsedExpenseRow>) {
@@ -129,16 +129,16 @@ export default function Expenses() {
   }
 
   async function handleImportAll() {
-    if (!importDate) return setImportError('Please pick a date for these expenses.')
     const bad = parsedRows.find(
       (r) =>
+        !r.date ||
         !r.amount ||
         r.amount <= 0 ||
         !r.description ||
         (r.method === 'credit_card' && !r.cardId) ||
         (r.method !== 'credit_card' && r.method !== 'cash' && !r.accountId),
     )
-    if (bad) return setImportError('Some rows are missing an amount, description, card, or account. Fix them before importing.')
+    if (bad) return setImportError('Some rows are missing a date, amount, description, card, or account. Fix them before importing.')
     setImporting(true)
     setImportError('')
     try {
@@ -150,7 +150,7 @@ export default function Expenses() {
           credit_card_id: row.method === 'credit_card' ? row.cardId || null : null,
           account_id: row.method !== 'credit_card' ? row.accountId || null : null,
           description: row.description,
-          expense_date: importDate,
+          expense_date: row.date,
         })
       }
       setShowImport(false)
@@ -178,12 +178,13 @@ export default function Expenses() {
         {showImport && (
           <div className="mt-3 space-y-3">
             <p className="text-xs text-slate-400">
-              Paste lines like <code>Palengke - 284 (Gcash)</code>, one expense per line. We'll guess the category and
-              payment method — review before importing.
+              Paste lines like <code>Palengke - 284 (Gcash)</code>, one expense per line. Add a date at the start of
+              a line (e.g. <code>7-29 Palengke - 284 (Gcash)</code> or <code>7/29/2026 ...</code>) to override the
+              default below — we'll guess the category and payment method too. Review before importing.
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="sm:col-span-1">
-                <label className={labelClass}>Date for these expenses</label>
+                <label className={labelClass}>Default date (used when a line has no date)</label>
                 <input
                   type="date"
                   value={importDate}
@@ -195,7 +196,7 @@ export default function Expenses() {
             <textarea
               value={importText}
               onChange={(e) => setImportText(e.target.value)}
-              placeholder={'Palengke - 284 (Gcash)\nOks manok - 695 (Maya CC)\nSukiya - 493 (BPI CC)'}
+              placeholder={'Palengke - 284 (Gcash)\n7-29 Oks manok - 695 (Maya CC)\n7/30/2026 Sukiya - 493 (BPI CC)'}
               rows={6}
               className={`${input} w-full font-mono text-sm`}
             />
@@ -212,6 +213,7 @@ export default function Expenses() {
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="text-left text-slate-400 text-xs">
+                        <th className="pb-2 pr-2">Date</th>
                         <th className="pb-2 pr-2">Description</th>
                         <th className="pb-2 pr-2">Amount</th>
                         <th className="pb-2 pr-2">Category</th>
@@ -223,6 +225,14 @@ export default function Expenses() {
                     <tbody>
                       {parsedRows.map((row, i) => (
                         <tr key={i} className="border-t border-white/5 align-top">
+                          <td className="py-1.5 pr-2">
+                            <input
+                              type="date"
+                              value={row.date}
+                              onChange={(e) => updateParsedRow(i, { date: e.target.value })}
+                              className={`${input} w-36`}
+                            />
+                          </td>
                           <td className="py-1.5 pr-2">
                             <input
                               value={row.description}
