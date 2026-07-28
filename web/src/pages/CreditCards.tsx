@@ -36,6 +36,8 @@ export default function CreditCards() {
   const [expenses, setExpenses] = useState<Expense[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [cycleOffsets, setCycleOffsets] = useState<Record<string, number>>({})
+  const [sortBy, setSortBy] = useState<'date' | 'description' | 'amount'>('date')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
 
   const [editingPaymentId, setEditingPaymentId] = useState<string | null>(null)
   const [payForm, setPayForm] = useState(emptyPayForm)
@@ -100,6 +102,15 @@ export default function CreditCards() {
 
   function shiftCycle(cardId: string, delta: number) {
     setCycleOffsets((prev) => ({ ...prev, [cardId]: (prev[cardId] ?? 0) + delta }))
+  }
+
+  function handleSort(col: 'date' | 'description' | 'amount') {
+    if (col === sortBy) {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+    } else {
+      setSortBy(col)
+      setSortDir('asc')
+    }
   }
 
   function startEditExpense(e: Expense) {
@@ -304,16 +315,23 @@ export default function CreditCards() {
                   <table className="w-full text-xs min-w-[480px]">
                     <thead>
                       <tr className="text-slate-500 text-left">
-                        <th className="font-medium px-2 py-1.5">Date</th>
-                        <th className="font-medium px-2 py-1.5">Description</th>
-                        <th className="font-medium px-2 py-1.5 text-right">Amount</th>
+                        <SortableHeader col="date" label="Date" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} />
+                        <SortableHeader col="description" label="Description" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} />
+                        <SortableHeader col="amount" label="Amount" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} align="right" />
                         <th className="font-medium px-2 py-1.5 text-right">Running Total</th>
                         <th className="font-medium px-2 py-1.5 text-right">Available</th>
                         <th className="font-medium px-2 py-1.5"></th>
                       </tr>
                     </thead>
                     <tbody>
-                      {rows.map((row) => {
+                      {[...rows]
+                        .sort((a, b) => {
+                          const dir = sortDir === 'asc' ? 1 : -1
+                          if (sortBy === 'amount') return (a.amount - b.amount) * dir
+                          if (sortBy === 'description') return a.description.localeCompare(b.description) * dir
+                          return a.date.localeCompare(b.date) * dir
+                        })
+                        .map((row) => {
                         const isFullyPaid = row.kind === 'payment' && row.runningTotal <= 0
                         return (
                           <tr key={`${row.kind}-${row.id}`} className={`border-t border-white/5 ${isFullyPaid ? 'bg-brand-500/15' : ''}`}>
@@ -438,5 +456,34 @@ export default function CreditCards() {
         </div>
       )}
     </div>
+  )
+}
+
+function SortableHeader({
+  col,
+  label,
+  sortBy,
+  sortDir,
+  onSort,
+  align = 'left',
+}: {
+  col: 'date' | 'description' | 'amount'
+  label: string
+  sortBy: 'date' | 'description' | 'amount'
+  sortDir: 'asc' | 'desc'
+  onSort: (col: 'date' | 'description' | 'amount') => void
+  align?: 'left' | 'right'
+}) {
+  const active = sortBy === col
+  return (
+    <th className={`font-medium px-2 py-1.5 ${align === 'right' ? 'text-right' : 'text-left'}`}>
+      <button
+        onClick={() => onSort(col)}
+        className={`tap-shrink inline-flex items-center gap-1 hover:text-slate-200 ${active ? 'text-slate-200' : ''}`}
+      >
+        {label}
+        <span className="text-[10px]">{active ? (sortDir === 'asc' ? '▲' : '▼') : ''}</span>
+      </button>
+    </th>
   )
 }

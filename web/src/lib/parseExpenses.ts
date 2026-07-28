@@ -15,49 +15,38 @@ export type ParsedExpenseRow = {
   error?: string
 }
 
-const LINE_RE = /^(.+?)\s*[-–—]\s*([\d,]+(?:\.\d+)?)\s*(?:\((.+?)\))?\s*$/
-
-// Matches an optional leading date like "7-29", "7/29/2026", or "2026-07-29" at the
-// start of a line, followed by whitespace and the rest of the entry.
-const LEADING_DATE_RE = /^(\d{1,4})[/-](\d{1,2})(?:[/-](\d{1,4}))?\s+(.*)$/
+// Description, then a separator (space and/or dash), then an amount (optionally
+// signed), then an optional trailing tag — with or without parentheses. Lazy
+// backtracking on the description means it still finds the right split even when
+// the merchant name itself contains a dash (e.g. "7-Eleven - 100 Cash").
+const AMOUNT_TAG_RE = /^(.*?)[\s\-–—]+(-?[\d,]+(?:\.\d+)?)[\s\-–—]*\(?\s*([^()]*?)\s*\)?$/
 
 function parseLeadingDate(line: string, defaultDate: string): { date: string; rest: string } | null {
-  const m = line.match(LEADING_DATE_RE)
-  if (!m) return null
-  const [, aStr, bStr, cStr, rest] = m
-  const a = Number(aStr)
-  const b = Number(bStr)
   const defaultYear = Number(defaultDate.slice(0, 4)) || new Date().getFullYear()
+  let m: RegExpMatchArray | null
 
-  let year: number
-  let month: number
-  let day: number
-  if (cStr !== undefined) {
-    const c = Number(cStr)
-    if (aStr.length === 4) {
-      year = a
-      month = b
-      day = c
-    } else if (cStr.length === 4) {
-      year = c
-      month = a
-      day = b
-    } else {
-      year = 2000 + c
-      month = a
-      day = b
-    }
-  } else {
-    month = a
-    day = b
-    year = defaultYear
+  // 2026-07-29 / 2026/07/29
+  if ((m = line.match(/^(\d{4})[/-](\d{1,2})[/-](\d{1,2})\s+(.*)$/))) {
+    return { date: `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`, rest: m[4] }
   }
-
-  if (month < 1 || month > 12 || day < 1 || day > 31) return null
-
-  const mm = String(month).padStart(2, '0')
-  const dd = String(day).padStart(2, '0')
-  return { date: `${year}-${mm}-${dd}`, rest }
+  // 7/29/2026 or 7-29-26
+  if ((m = line.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})\s+(.*)$/))) {
+    const year = m[3].length === 4 ? Number(m[3]) : 2000 + Number(m[3])
+    return { date: `${year}-${m[1].padStart(2, '0')}-${m[2].padStart(2, '0')}`, rest: m[4] }
+  }
+  // 7-29 or 7/29 (year inferred from the default date)
+  if ((m = line.match(/^(\d{1,2})[/-](\d{1,2})\s+(.*)$/))) {
+    return { date: `${defaultYear}-${m[1].padStart(2, '0')}-${m[2].padStart(2, '0')}`, rest: m[3] }
+  }
+  // 0729 — no separator at all, exactly MMDD
+  if ((m = line.match(/^(\d{4})\s+(.*)$/))) {
+    const mm = m[1].slice(0, 2)
+    const dd = m[1].slice(2, 4)
+    if (Number(mm) >= 1 && Number(mm) <= 12 && Number(dd) >= 1 && Number(dd) <= 31) {
+      return { date: `${defaultYear}-${mm}-${dd}`, rest: m[2] }
+    }
+  }
+  return null
 }
 
 const CATEGORY_KEYWORDS: Record<string, string[]> = {
@@ -134,7 +123,7 @@ function guessPaymentMethod(
   }
 
   const account = accounts.find((a) => t.includes(a.name.toLowerCase()) || a.name.toLowerCase().includes(t))
-  if (account) return { method: 'debit', cardId: '', accountId: account.id }
+  if (account) return { method: account.type === 'ewallet' ? 'ewallet' : 'debit', cardId: '', accountId: account.id }
 
   return { method: 'other', cardId: '', accountId: '' }
 }
@@ -153,9 +142,9 @@ export function parseExpenseText(
     .map((raw) => {
       const leading = parseLeadingDate(raw, defaultDate)
       const date = leading?.date ?? defaultDate
-      const lineToMatch = leading?.rest ?? raw
+      const lineToMatch = (leading?.rest ?? raw).replace(/^[\s\-–—]+/, '')
 
-      const match = lineToMatch.match(LINE_RE)
+      const match = lineToMatch.match(AMOUNT_TAG_RE)
       if (!match) {
         return {
           raw,
