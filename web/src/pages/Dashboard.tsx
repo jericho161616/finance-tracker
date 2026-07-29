@@ -44,6 +44,7 @@ export default function Dashboard() {
   const [budgetCategories, setBudgetCategoriesState] = useState(getBudgetCategories())
   const [trendMonths, setTrendMonths] = useState<3 | 6 | 12>(3)
   const [showReference, setShowReference] = useState(false)
+  const [showAllocation, setShowAllocation] = useState(false)
 
   useEffect(() => {
     Promise.all([
@@ -320,62 +321,168 @@ export default function Dashboard() {
           )}
         </section>
 
-        {totalIncome > 0 && (
-          <section className="bg-surface-2 rounded-2xl border border-white/5 p-5">
-            <h2 className="font-semibold mb-1 flex items-center gap-1.5">
-              <PiggyBank size={16} className="text-brand-400" /> Actual Allocation
-            </h2>
-            <p className="text-xs text-slate-500 mb-4">
-              {fmt(totalAllocated)} tracked this month ({fmt(monthAllocations.reduce((sum, a) => sum + a.amount, 0))}{' '}
-              logged manually, {fmt(bucketedExpenses.reduce((sum, e) => sum + e.amount, 0))} from tagged expenses) ·{' '}
-              {fmt(Math.max(unallocated, 0))} not yet allocated —{' '}
-              <Link to="/allocations" className="text-brand-400 hover:text-brand-300">
-                log it
-              </Link>
-            </p>
-            {monthAllocations.length === 0 && bucketedExpenses.length === 0 ? (
-              <p className="text-sm text-slate-500">
-                No allocations tracked this month yet. Log a transfer on the Allocations page, or tag expense
-                categories with a budget bucket in Settings.
-              </p>
-            ) : (
-              <div style={{ width: '100%', height: Math.max(140, actualVsPlanned.length * 44) }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={actualVsPlanned} layout="vertical" margin={{ left: 8, right: 16 }}>
-                    <XAxis type="number" hide />
-                    <YAxis
-                      type="category"
-                      dataKey="name"
-                      width={100}
-                      tick={{ fill: '#cbd5e1', fontSize: 12 }}
-                      axisLine={false}
-                      tickLine={false}
-                    />
-                    <Tooltip
-                      formatter={(value) => fmt(Number(value))}
-                      cursor={{ fill: 'rgba(255,255,255,0.04)' }}
-                      contentStyle={{ background: '#16211a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, fontSize: 12 }}
-                      itemStyle={{ color: '#e2e8f0' }}
-                      labelStyle={{ color: '#94a3b8' }}
-                    />
-                    <Legend wrapperStyle={{ fontSize: 12 }} />
-                    <Bar dataKey="planned" name="Planned" fill="rgba(148,163,184,0.4)" radius={[0, 6, 6, 0]} barSize={12} />
-                    <Bar dataKey="actual" name="Actual" fill="#10b981" radius={[0, 6, 6, 0]} barSize={12} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
+        <button
+          onClick={() => setShowAllocation((v) => !v)}
+          className="tap-shrink w-full flex items-center justify-between bg-surface-2 border border-white/5 rounded-2xl px-4 py-3.5"
+        >
+          <span className="font-semibold text-sm">Suggested vs. Actual Allocation</span>
+          <span className="flex items-center gap-1.5 text-xs text-slate-400">
+            {showAllocation ? 'Hide' : 'Show'}
+            <ChevronDown size={14} className={`transition-transform ${showAllocation ? 'rotate-180' : ''}`} />
+          </span>
+        </button>
+
+        {showAllocation && (
+          <div className="space-y-3">
+            {totalIncome > 0 && budgetTotal > 0 && (
+              <section className="bg-surface-2 rounded-2xl border border-white/5 p-5">
+                <h2 className="font-semibold flex items-center gap-1.5 mb-1">
+                  <Lightbulb size={16} className="text-brand-400" /> Suggested Allocation
+                </h2>
+                <p className="text-xs text-slate-400 mt-1 mb-4">
+                  Based on this month's income of {fmt(totalIncome)}. Adjust the plan in Settings.
+                </p>
+                <div className="flex flex-col sm:flex-row items-center gap-4">
+                  <div className="w-40 h-40 shrink-0">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie data={allocationData} dataKey="value" nameKey="name" innerRadius={40} outerRadius={70} paddingAngle={2}>
+                          {allocationData.map((_, i) => (
+                            <Cell key={i} fill={ALLOCATION_COLORS[i % ALLOCATION_COLORS.length]} stroke="none" />
+                          ))}
+                        </Pie>
+                        <Tooltip
+                          formatter={(value) => fmt(Number(value))}
+                          contentStyle={{ background: '#16211a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, fontSize: 12 }}
+                          itemStyle={{ color: '#e2e8f0' }}
+                        />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <div className="flex-1 w-full space-y-2">
+                    {allocationData.map((b, i) => (
+                      <div key={b.name} className="flex justify-between items-center text-sm">
+                        <span className="flex items-center gap-2 text-slate-300">
+                          <span
+                            className="w-2.5 h-2.5 rounded-full shrink-0"
+                            style={{ background: ALLOCATION_COLORS[i % ALLOCATION_COLORS.length] }}
+                          />
+                          {b.name} <span className="text-slate-500">({b.percent}%)</span>
+                        </span>
+                        <span className="font-medium text-slate-100">{fmt(b.value)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                {budgetTotal !== 100 && (
+                  <p className="text-xs text-amber-400 mt-3">
+                    Your allocation percentages add up to {budgetTotal}%, not 100 — adjust them in Settings.
+                  </p>
+                )}
+              </section>
             )}
-          </section>
+
+            {totalIncome > 0 && (
+              <section className="bg-surface-2 rounded-2xl border border-white/5 p-5">
+                <h2 className="font-semibold mb-1 flex items-center gap-1.5">
+                  <PiggyBank size={16} className="text-brand-400" /> Actual Allocation
+                </h2>
+                <p className="text-xs text-slate-500 mb-4">
+                  {fmt(totalAllocated)} tracked this month ({fmt(monthAllocations.reduce((sum, a) => sum + a.amount, 0))}{' '}
+                  logged manually, {fmt(bucketedExpenses.reduce((sum, e) => sum + e.amount, 0))} from tagged expenses) ·{' '}
+                  {fmt(Math.max(unallocated, 0))} not yet allocated —{' '}
+                  <Link to="/allocations" className="text-brand-400 hover:text-brand-300">
+                    log it
+                  </Link>
+                </p>
+                {monthAllocations.length === 0 && bucketedExpenses.length === 0 ? (
+                  <p className="text-sm text-slate-500">
+                    No allocations tracked this month yet. Log a transfer on the Allocations page, or tag expense
+                    categories with a budget bucket in Settings.
+                  </p>
+                ) : (
+                  <div style={{ width: '100%', height: Math.max(140, actualVsPlanned.length * 44) }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={actualVsPlanned} layout="vertical" margin={{ left: 8, right: 16 }}>
+                        <XAxis type="number" hide />
+                        <YAxis
+                          type="category"
+                          dataKey="name"
+                          width={100}
+                          tick={{ fill: '#cbd5e1', fontSize: 12 }}
+                          axisLine={false}
+                          tickLine={false}
+                        />
+                        <Tooltip
+                          formatter={(value) => fmt(Number(value))}
+                          cursor={{ fill: 'rgba(255,255,255,0.04)' }}
+                          contentStyle={{ background: '#16211a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, fontSize: 12 }}
+                          itemStyle={{ color: '#e2e8f0' }}
+                          labelStyle={{ color: '#94a3b8' }}
+                        />
+                        <Legend wrapperStyle={{ fontSize: 12 }} />
+                        <Bar dataKey="planned" name="Planned" fill="rgba(148,163,184,0.4)" radius={[0, 6, 6, 0]} barSize={12} />
+                        <Bar dataKey="actual" name="Actual" fill="#10b981" radius={[0, 6, 6, 0]} barSize={12} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
+              </section>
+            )}
+          </div>
         )}
+
+        <section className="bg-surface-2 rounded-2xl border border-white/5 p-5">
+          <div className="flex items-center justify-between mb-1">
+            <h2 className="font-semibold">Expense Trend</h2>
+            <div className="flex gap-1">
+              {TREND_RANGES.map((r) => (
+                <button
+                  key={r.label}
+                  onClick={() => setTrendMonths(r.months)}
+                  className={`tap-shrink text-xs font-medium px-2.5 py-1 rounded-full ${
+                    trendMonths === r.months ? 'bg-brand-600 text-white' : 'bg-white/5 text-slate-400 hover:text-slate-100'
+                  }`}
+                >
+                  {r.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          {monthOverMonthDelta !== null && (
+            <p className={`text-xs mb-3 flex items-center gap-1 ${monthOverMonthDelta > 0 ? 'text-red-400' : 'text-brand-400'}`}>
+              {monthOverMonthDelta > 0 ? <TrendingUp size={13} /> : <TrendingDown size={13} />}
+              {Math.abs(monthOverMonthDelta).toFixed(0)}% {monthOverMonthDelta > 0 ? 'higher' : 'lower'} than last month
+            </p>
+          )}
+          <div style={{ width: '100%', height: 180 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={trendData} margin={{ left: -20, right: 8, top: 8 }}>
+                <XAxis dataKey="label" tick={{ fill: '#94a3b8', fontSize: 12 }} axisLine={false} tickLine={false} />
+                <YAxis hide />
+                <ReferenceLine y={trendAverage} stroke="rgba(148,163,184,0.4)" strokeDasharray="4 4" />
+                <Tooltip
+                  formatter={(value) => fmt(Number(value))}
+                  cursor={{ fill: 'rgba(255,255,255,0.04)' }}
+                  contentStyle={{ background: '#16211a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, fontSize: 12 }}
+                  itemStyle={{ color: '#e2e8f0' }}
+                  labelStyle={{ color: '#94a3b8' }}
+                />
+                <Bar dataKey="total" fill="#10b981" radius={[6, 6, 0, 0]} barSize={trendMonths > 6 ? 12 : 28} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+          <p className="text-xs text-slate-500 mt-2">Dashed line marks your {trendMonths}-month average.</p>
+        </section>
       </div>
 
-      {/* REFERENCE — collapsed by default: debt detail, plan, trend */}
+      {/* REFERENCE — collapsed by default: debt detail */}
       <ZoneLabel>Reference</ZoneLabel>
       <button
         onClick={() => setShowReference((v) => !v)}
         className="tap-shrink w-full flex items-center justify-between bg-surface-2 border border-white/5 rounded-2xl px-4 py-3.5"
       >
-        <span className="font-semibold text-sm">Debt breakdown, suggested plan &amp; trend</span>
+        <span className="font-semibold text-sm">Debt breakdown</span>
         <span className="flex items-center gap-1.5 text-xs text-slate-400">
           {showReference ? 'Hide' : 'Show'}
           <ChevronDown size={14} className={`transition-transform ${showReference ? 'rotate-180' : ''}`} />
@@ -425,97 +532,6 @@ export default function Dashboard() {
             <Stat label="Available Credit" value={fmt(totalCardLimit - totalCardDebt)} accent="text-slate-200" />
             <Stat label="Overall Utilization" value={`${totalCardUtil.toFixed(0)}%`} accent="text-slate-200" />
           </div>
-
-          {totalIncome > 0 && budgetTotal > 0 && (
-            <section className="bg-surface-2 rounded-2xl border border-white/5 p-5">
-              <h2 className="font-semibold flex items-center gap-1.5 mb-1">
-                <Lightbulb size={16} className="text-brand-400" /> Suggested Allocation
-              </h2>
-              <p className="text-xs text-slate-400 mt-1 mb-4">
-                Based on this month's income of {fmt(totalIncome)}. Adjust the plan in Settings.
-              </p>
-              <div className="flex flex-col sm:flex-row items-center gap-4">
-                <div className="w-40 h-40 shrink-0">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie data={allocationData} dataKey="value" nameKey="name" innerRadius={40} outerRadius={70} paddingAngle={2}>
-                        {allocationData.map((_, i) => (
-                          <Cell key={i} fill={ALLOCATION_COLORS[i % ALLOCATION_COLORS.length]} stroke="none" />
-                        ))}
-                      </Pie>
-                      <Tooltip
-                        formatter={(value) => fmt(Number(value))}
-                        contentStyle={{ background: '#16211a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, fontSize: 12 }}
-                        itemStyle={{ color: '#e2e8f0' }}
-                      />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-                <div className="flex-1 w-full space-y-2">
-                  {allocationData.map((b, i) => (
-                    <div key={b.name} className="flex justify-between items-center text-sm">
-                      <span className="flex items-center gap-2 text-slate-300">
-                        <span
-                          className="w-2.5 h-2.5 rounded-full shrink-0"
-                          style={{ background: ALLOCATION_COLORS[i % ALLOCATION_COLORS.length] }}
-                        />
-                        {b.name} <span className="text-slate-500">({b.percent}%)</span>
-                      </span>
-                      <span className="font-medium text-slate-100">{fmt(b.value)}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              {budgetTotal !== 100 && (
-                <p className="text-xs text-amber-400 mt-3">
-                  Your allocation percentages add up to {budgetTotal}%, not 100 — adjust them in Settings.
-                </p>
-              )}
-            </section>
-          )}
-
-          <section className="bg-surface-2 rounded-2xl border border-white/5 p-5">
-            <div className="flex items-center justify-between mb-1">
-              <h2 className="font-semibold">Expense Trend</h2>
-              <div className="flex gap-1">
-                {TREND_RANGES.map((r) => (
-                  <button
-                    key={r.label}
-                    onClick={() => setTrendMonths(r.months)}
-                    className={`tap-shrink text-xs font-medium px-2.5 py-1 rounded-full ${
-                      trendMonths === r.months ? 'bg-brand-600 text-white' : 'bg-white/5 text-slate-400 hover:text-slate-100'
-                    }`}
-                  >
-                    {r.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-            {monthOverMonthDelta !== null && (
-              <p className={`text-xs mb-3 flex items-center gap-1 ${monthOverMonthDelta > 0 ? 'text-red-400' : 'text-brand-400'}`}>
-                {monthOverMonthDelta > 0 ? <TrendingUp size={13} /> : <TrendingDown size={13} />}
-                {Math.abs(monthOverMonthDelta).toFixed(0)}% {monthOverMonthDelta > 0 ? 'higher' : 'lower'} than last month
-              </p>
-            )}
-            <div style={{ width: '100%', height: 180 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={trendData} margin={{ left: -20, right: 8, top: 8 }}>
-                  <XAxis dataKey="label" tick={{ fill: '#94a3b8', fontSize: 12 }} axisLine={false} tickLine={false} />
-                  <YAxis hide />
-                  <ReferenceLine y={trendAverage} stroke="rgba(148,163,184,0.4)" strokeDasharray="4 4" />
-                  <Tooltip
-                    formatter={(value) => fmt(Number(value))}
-                    cursor={{ fill: 'rgba(255,255,255,0.04)' }}
-                    contentStyle={{ background: '#16211a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, fontSize: 12 }}
-                    itemStyle={{ color: '#e2e8f0' }}
-                    labelStyle={{ color: '#94a3b8' }}
-                  />
-                  <Bar dataKey="total" fill="#10b981" radius={[6, 6, 0, 0]} barSize={trendMonths > 6 ? 12 : 28} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-            <p className="text-xs text-slate-500 mt-2">Dashed line marks your {trendMonths}-month average.</p>
-          </section>
         </div>
       )}
     </div>
