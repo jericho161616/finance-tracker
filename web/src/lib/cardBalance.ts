@@ -2,6 +2,15 @@ import { format } from 'date-fns'
 import { getCycle, getDueDate } from './cycle'
 import type { CreditCard, CreditCardPayment, Expense } from './api'
 
+// Repeated floating-point addition/subtraction over decimal amounts (e.g. summing
+// 14 expense lines against one payment that should net to exactly zero) can leave
+// a tiny residue like 0.000000004 instead of 0 — round to the nearest cent so
+// "fully paid" checks (balance <= 0) aren't fooled by a residue too small to
+// ever be displayed.
+function round2(n: number): number {
+  return Math.round((n + Number.EPSILON) * 100) / 100
+}
+
 /**
  * Balance for one statement, as of a given point in time: charges are only ever
  * counted through the statement's own close date, but payments get a grace window
@@ -20,13 +29,13 @@ function statementBalanceAsOf(
   const statementDateStr = format(statementDate, 'yyyy-MM-dd')
   const paymentCutoffStr = format(dueDate < today ? dueDate : today, 'yyyy-MM-dd')
 
-  return (
+  return round2(
     expenses
       .filter((e) => e.credit_card_id === card.id && e.expense_date <= statementDateStr)
       .reduce((sum, e) => sum + e.amount, 0) -
-    payments
-      .filter((p) => p.credit_card_id === card.id && p.payment_date <= paymentCutoffStr)
-      .reduce((sum, p) => sum + p.amount, 0)
+      payments
+        .filter((p) => p.credit_card_id === card.id && p.payment_date <= paymentCutoffStr)
+        .reduce((sum, p) => sum + p.amount, 0),
   )
 }
 
@@ -50,9 +59,10 @@ export function computeCardBalances(
   const cardPayments = payments.filter((p) => p.credit_card_id === card.id)
   const todayStr = format(today, 'yyyy-MM-dd')
 
-  const currentBalance =
+  const currentBalance = round2(
     cardExpenses.filter((e) => e.expense_date <= todayStr).reduce((sum, e) => sum + e.amount, 0) -
-    cardPayments.filter((p) => p.payment_date <= todayStr).reduce((sum, p) => sum + p.amount, 0)
+      cardPayments.filter((p) => p.payment_date <= todayStr).reduce((sum, p) => sum + p.amount, 0),
+  )
 
   const { cycleEnd: statementDate } = getCycle(card.statement_day, -1, today)
   const dueDate = getDueDate(statementDate, card.due_day)
@@ -128,8 +138,8 @@ export function computeCycleStatement(
 
   let runningTotal = 0
   const rowsWithTotals: StatementRow[] = rows.map((r) => {
-    runningTotal += r.kind === 'expense' ? r.amount : -r.amount
-    return { ...r, runningTotal, availableAfter: card.credit_limit - runningTotal }
+    runningTotal = round2(runningTotal + (r.kind === 'expense' ? r.amount : -r.amount))
+    return { ...r, runningTotal, availableAfter: round2(card.credit_limit - runningTotal) }
   })
 
   const balance = rowsWithTotals.length ? rowsWithTotals[rowsWithTotals.length - 1].runningTotal : 0
