@@ -112,6 +112,8 @@ export default function Dashboard() {
   const cardStatusList = liveCardBalances
     .map((c) => ({ ...c, daysUntilDue: differenceInCalendarDays(c.dueDate, new Date()) }))
     .sort((a, b) => a.daysUntilDue - b.daysUntilDue)
+  const totalDueNow = cardStatusList.reduce((sum, c) => sum + Math.max(0, c.statementBalance), 0)
+  const projectedSavedIfPaid = netBalance - totalDueNow
 
   const byCategory = monthExpenses.reduce<Record<string, number>>((acc, e) => {
     const key = e.category_id ?? 'uncategorized'
@@ -184,6 +186,14 @@ export default function Dashboard() {
           </div>
           {totalIncome > 0 && (
             <p className="text-xs text-brand-100/70 mt-3">Savings rate: {savingsRate.toFixed(0)}% of income</p>
+          )}
+          {totalDueNow > 0 && (
+            <div className="mt-3 pt-3 border-t border-white/15">
+              <p className="text-xs text-brand-100/70">
+                If you pay off {fmt(totalDueNow)} in pending bills now, you'd have{' '}
+                <span className="font-semibold text-white">{fmt(projectedSavedIfPaid)}</span> saved this month.
+              </p>
+            </div>
           )}
         </div>
 
