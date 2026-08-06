@@ -156,7 +156,7 @@ export default function CreditCards() {
           you swiped, use the Expenses page instead — payments here don't count as new expenses since the purchase
           was already recorded there.
         </p>
-        <form onSubmit={handlePay} className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        <form onSubmit={handlePay} className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div>
             <label className={labelClass}>Which Card?</label>
             <select
@@ -406,7 +406,7 @@ export default function CreditCards() {
         <div className="fixed inset-0 z-30 bg-black/60 flex items-center justify-center p-4" onClick={cancelEditExpense}>
           <div className={`${cardBox} w-full max-w-md`} onClick={(e) => e.stopPropagation()}>
             <h2 className="font-semibold mb-3">Edit Expense</h2>
-            <form onSubmit={handleSaveExpense} className="grid grid-cols-2 gap-3">
+            <form onSubmit={handleSaveExpense} className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className={labelClass}>Date</label>
                 <input
