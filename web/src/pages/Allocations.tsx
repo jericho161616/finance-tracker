@@ -139,7 +139,7 @@ export default function Allocations() {
           Log where a chunk of your income actually went — e.g. transferred to savings, moved into your emergency
           fund, or set aside as spending money. Expenses tagged with a bucket in Settings count automatically too.
         </p>
-        <form onSubmit={handleSubmit} className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        <form onSubmit={handleSubmit} className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div>
             <label className={labelClass}>Date</label>
             <input

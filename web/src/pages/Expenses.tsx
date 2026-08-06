@@ -209,7 +209,112 @@ export default function Expenses() {
 
             {parsedRows.length > 0 && (
               <div className="space-y-2">
-                <div className="overflow-x-auto">
+                <div className="space-y-2.5 sm:hidden">
+                  {parsedRows.map((row, i) => (
+                    <div key={i} className="rounded-2xl border border-white/5 bg-surface-3 p-3">
+                      <div className="flex items-start gap-2 mb-2.5">
+                        <input
+                          value={row.description}
+                          onChange={(e) => updateParsedRow(i, { description: e.target.value })}
+                          className={`${input} flex-1 min-w-0`}
+                        />
+                        <input
+                          type="number"
+                          step={0.01}
+                          value={row.amount ?? ''}
+                          onChange={(e) => updateParsedRow(i, { amount: Number(e.target.value) })}
+                          className={`${input} w-24 text-right shrink-0`}
+                        />
+                        <button type="button" onClick={() => removeParsedRow(i)} className={`${iconButton} shrink-0`}>
+                          <X size={16} />
+                        </button>
+                      </div>
+                      {row.error && <p className="text-xs text-red-400 mb-2.5">{row.error}</p>}
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="block text-[10px] text-slate-500 mb-1">Date</label>
+                          <input
+                            type="date"
+                            value={row.date}
+                            onChange={(e) => updateParsedRow(i, { date: e.target.value })}
+                            className={`${input} w-full text-sm`}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] text-slate-500 mb-1">Category</label>
+                          <select
+                            value={row.categoryId}
+                            onChange={(e) => updateParsedRow(i, { categoryId: e.target.value })}
+                            className={`${input} w-full text-sm`}
+                          >
+                            <option value="">Select…</option>
+                            {categories.map((c) => (
+                              <option key={c.id} value={c.id}>
+                                {c.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-[10px] text-slate-500 mb-1">Method</label>
+                          <select
+                            value={row.method}
+                            onChange={(e) =>
+                              updateParsedRow(i, {
+                                method: e.target.value as ParsedExpenseRow['method'],
+                                cardId: '',
+                                accountId: '',
+                              })
+                            }
+                            className={`${input} w-full text-sm`}
+                          >
+                            {PAYMENT_METHODS.map((m) => (
+                              <option key={m} value={m}>
+                                {m.replace('_', ' ')}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        {row.method === 'credit_card' && (
+                          <div>
+                            <label className="block text-[10px] text-slate-500 mb-1">Card</label>
+                            <select
+                              value={row.cardId}
+                              onChange={(e) => updateParsedRow(i, { cardId: e.target.value })}
+                              className={`${input} w-full text-sm`}
+                            >
+                              <option value="">Select card…</option>
+                              {cards.map((c) => (
+                                <option key={c.id} value={c.id}>
+                                  {c.bank_name}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
+                        {row.method !== 'credit_card' && row.method !== 'cash' && (
+                          <div>
+                            <label className="block text-[10px] text-slate-500 mb-1">Account</label>
+                            <select
+                              value={row.accountId}
+                              onChange={(e) => updateParsedRow(i, { accountId: e.target.value })}
+                              className={`${input} w-full text-sm`}
+                            >
+                              <option value="">Select account…</option>
+                              {accounts.map((a) => (
+                                <option key={a.id} value={a.id}>
+                                  {a.name}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="hidden sm:block overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="text-left text-slate-400 text-xs">
@@ -338,7 +443,7 @@ export default function Expenses() {
           Swiped your credit card? Log it here with payment method "Credit Card" — it counts as an expense right
           away. Only use the Credit Cards page when you're paying off the bill.
         </p>
-        <form onSubmit={handleSubmit} className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        <form onSubmit={handleSubmit} className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div>
             <label className={labelClass}>Date</label>
             <input

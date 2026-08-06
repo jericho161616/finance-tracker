@@ -299,7 +299,7 @@ export default function Settings() {
           <CreditCardIcon size={16} className="text-brand-400" /> Credit Cards
         </h2>
         <form
-          className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4"
+          className="grid grid-cols-1 sm:grid-cols-4 gap-2 mb-4"
           onSubmit={async (e) => {
             e.preventDefault()
             if (!cardBank.trim()) return

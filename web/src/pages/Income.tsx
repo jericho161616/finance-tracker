@@ -90,7 +90,7 @@ export default function Income() {
 
       <section className={card}>
         <h2 className="font-semibold mb-4">{editingId ? 'Edit Income' : 'Log Incoming Money'}</h2>
-        <form onSubmit={handleSubmit} className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        <form onSubmit={handleSubmit} className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div>
             <label className={labelClass}>Date</label>
             <input
