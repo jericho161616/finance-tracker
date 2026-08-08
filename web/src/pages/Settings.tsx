@@ -29,10 +29,24 @@ export default function Settings() {
   const [budget, setBudget] = useState<BudgetCategory[]>([])
   const [budgetSaved, setBudgetSaved] = useState(false)
 
+  const [deleteError, setDeleteError] = useState('')
+
   async function refresh() {
     setAccounts(await api.accounts.list())
     setCategories(await api.categories.list())
     setCards(await api.creditCards.list())
+  }
+
+  async function safeDelete(fn: () => Promise<unknown>, itemLabel: string) {
+    try {
+      await fn()
+      setDeleteError('')
+      refresh()
+    } catch {
+      setDeleteError(
+        `Can't delete "${itemLabel}" — it's used by one or more existing expenses, income, or payments. Remove those first.`,
+      )
+    }
   }
 
   useEffect(() => {
@@ -45,6 +59,15 @@ export default function Settings() {
 
   return (
     <div className="space-y-5 animate-in">
+      {deleteError && (
+        <div className="flex items-start justify-between gap-3 bg-red-500/10 border border-red-500/30 text-red-300 text-sm rounded-2xl px-4 py-3">
+          <span>{deleteError}</span>
+          <button onClick={() => setDeleteError('')} className="tap-shrink shrink-0 text-red-300 hover:text-red-100">
+            <X size={14} />
+          </button>
+        </div>
+      )}
+
       <section className={card}>
         <h2 className="font-semibold mb-1 flex items-center gap-1.5">
           <Target size={16} className="text-brand-400" /> Monthly Savings Goal
@@ -181,10 +204,7 @@ export default function Settings() {
                 {a.name} <span className="text-slate-500">({a.type})</span>
               </span>
               <button
-                onClick={async () => {
-                  await api.accounts.remove(a.id)
-                  refresh()
-                }}
+                onClick={() => safeDelete(() => api.accounts.remove(a.id), a.name)}
                 className="tap-shrink text-red-400 hover:text-red-300 text-xs"
               >
                 Remove
@@ -270,10 +290,7 @@ export default function Settings() {
                     </select>
                   )}
                   <button
-                    onClick={async () => {
-                      await api.categories.remove(c.id)
-                      refresh()
-                    }}
+                    onClick={() => safeDelete(() => api.categories.remove(c.id), c.name)}
                     className="tap-shrink text-red-400 hover:text-red-300 text-xs"
                   >
                     Remove
@@ -404,10 +421,7 @@ export default function Settings() {
                   <Pencil size={14} />
                 </button>
                 <button
-                  onClick={async () => {
-                    await api.creditCards.remove(c.id)
-                    refresh()
-                  }}
+                  onClick={() => safeDelete(() => api.creditCards.remove(c.id), c.bank_name)}
                   className="tap-shrink text-red-400 hover:text-red-300 text-xs"
                 >
                   Remove
